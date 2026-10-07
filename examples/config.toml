@@ -1,0 +1,19 @@
+# Copy to ~/.config/quaddeploy/config.toml. For a fork, replace abin-m with its owner.
+
+[repo]
+url = "https://github.com/abin-m/quaddeploy.git"
+branch = "main"
+path = "examples/deploy"
+
+# Accept only images signed by this repo's image workflow on the main branch.
+[verify]
+certificate_identity = "https://github.com/abin-m/quaddeploy/.github/workflows/image.yml@refs/heads/main"
+certificate_oidc_issuer = "https://token.actions.githubusercontent.com"
+
+# To verify with a public key instead, remove the two lines above and set:
+# key = "~/.config/quaddeploy/cosign.pub"
+
+[health]
+timeout = 60
+interval = 2
+urls = ["http://127.0.0.1:8080/healthz"]

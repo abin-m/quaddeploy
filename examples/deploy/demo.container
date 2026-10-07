@@ -1,0 +1,10 @@
+[Unit]
+Description=QuadDeploy demo app
+
+[Container]
+# QuadDeploy pins this tag to a signed digest. For a fork, replace abin-m with its owner.
+Image=ghcr.io/abin-m/quaddeploy-demo:main
+PublishPort=127.0.0.1:8080:8080
+
+[Install]
+WantedBy=default.target
