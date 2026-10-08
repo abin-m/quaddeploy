@@ -1,15 +1,36 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
 name = "quaddeploy"
-version = "0.1.0"
-description = "Pull-based deployment for a single host with rootless Podman, systemd Quadlets and signed images"
+dynamic = ["version"]
+description = "Pull-based deployment for a single Linux host, using rootless Podman, systemd Quadlets and cosign-signed images"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "abin-m" }]
+keywords = ["podman", "quadlet", "systemd", "gitops", "cosign", "sigstore", "deployment"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Installation/Setup",
+    "Topic :: System :: Systems Administration",
+    "Typing :: Typed",
+]
 dependencies = []
+
+[project.urls]
+Repository = "https://github.com/abin-m/quaddeploy"
+Documentation = "https://github.com/abin-m/quaddeploy/blob/main/docs/getting-started.md"
+Changelog = "https://github.com/abin-m/quaddeploy/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
@@ -17,8 +38,16 @@ dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
 [project.scripts]
 quaddeploy = "quaddeploy.cli:main"
 
+# The version lives in one place, and the release workflow checks the tag against it.
+[tool.hatch.version]
+path = "src/quaddeploy/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/quaddeploy"]
+
+# Keep the images and CI files out of the source archive.
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "examples", "README.md", "CHANGELOG.md", "LICENSE", "pyproject.toml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

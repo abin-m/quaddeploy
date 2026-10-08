@@ -1,0 +1,53 @@
+# Build the package and publish it to PyPI when a version tag is pushed.
+#
+# Publishing uses PyPI's trusted publishing, so there is no API token to store. PyPI must
+# list this repo, this workflow file and the "pypi" environment as a trusted publisher.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine -e '.[dev]'
+      - name: Check that the tag matches the package version
+        run: |
+          version=$(python -c "import quaddeploy; print(quaddeploy.__version__)")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package version $version" >&2
+            exit 1
+          fi
+      - run: ruff check
+      - run: mypy
+      - run: pytest
+      - run: python -m build
+      - run: twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment: pypi
+    permissions:
+      # Lets PyPI confirm that this workflow is the one publishing.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
