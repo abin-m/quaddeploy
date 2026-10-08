@@ -44,9 +44,12 @@ DEMO_APP = Path(__file__).parents[2] / "examples" / "demo-app"
 GIT = ["git", "-c", "user.name=e2e", "-c", "user.email=e2e@example.com", "-c", "core.hooksPath="]
 
 
-def sh(*argv: str, cwd: Path | None = None, check: bool = True) -> str:
+def sh(
+    *argv: str, cwd: Path | None = None, check: bool = True, env: dict[str, str] | None = None
+) -> str:
     """Run a command and return its output. Show the output if it fails."""
-    proc = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, check=False)
+    full_env = {**os.environ, **(env or {})}
+    proc = subprocess.run(argv, cwd=cwd, env=full_env, capture_output=True, text=True, check=False)
     if check and proc.returncode != 0:
         pytest.fail(f"{' '.join(argv)} exited {proc.returncode}:\n{proc.stdout}{proc.stderr}")
     return proc.stdout.strip()
@@ -87,13 +90,7 @@ class Host:
         publish = ["-p", "127.0.0.1:5000:5000"]
         sh("podman", "run", "-d", "--rm", "--name", REGISTRY_CONTAINER, *publish, REGISTRY_IMAGE)
         self._wait_for_registry()
-        subprocess.run(
-            ["cosign", "generate-key-pair"],
-            cwd=self.work,
-            env={**os.environ, "COSIGN_PASSWORD": ""},
-            check=True,
-            capture_output=True,
-        )
+        sh("cosign", "generate-key-pair", cwd=self.work, env={"COSIGN_PASSWORD": ""})
         (self.repo / "deploy").mkdir(parents=True)
         sh("git", "init", "-q", "-b", "main", str(self.repo))
         # The key that signs the config repo's commits, and the host's list of trusted keys.
@@ -132,13 +129,20 @@ class Host:
         sh("podman", "push", "-q", "--digestfile", str(digest_file), ref)
         if sign:
             pinned = f"{IMAGE}@{digest_file.read_text().strip()}"
-            subprocess.run(
-                ["cosign", "sign", "--yes", "--key", "cosign.key", pinned],
-                cwd=self.work,
-                env={**os.environ, "COSIGN_PASSWORD": ""},
-                check=True,
-                capture_output=True,
-            )
+            self.sign(pinned)
+
+    def sign(self, pinned: str, **env: str) -> None:
+        """Sign an image digest with the throwaway key."""
+        sh(
+            "cosign",
+            "sign",
+            "--yes",
+            "--key",
+            "cosign.key",
+            pinned,
+            cwd=self.work,
+            env={"COSIGN_PASSWORD": "", **env},
+        )
 
     def commit_unit(
         self, tag: str, *, healthy: bool = True, signed: bool = True, image: str = IMAGE
@@ -242,13 +246,7 @@ class Host:
             ref,
         )
         pinned = f"{PRIVATE_IMAGE}@{digest_file.read_text().strip()}"
-        subprocess.run(
-            ["cosign", "sign", "--yes", "--key", "cosign.key", pinned],
-            cwd=self.work,
-            env={**os.environ, "COSIGN_PASSWORD": "", "REGISTRY_AUTH_FILE": str(authfile)},
-            check=True,
-            capture_output=True,
-        )
+        self.sign(pinned, REGISTRY_AUTH_FILE=str(authfile))
 
     def quaddeploy(self, *args: str) -> int:
         return cli.main(["--config", str(self.config), *args])
