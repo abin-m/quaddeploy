@@ -10,7 +10,17 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from quaddeploy import __version__, config, notify, preflight, reconcile, release, status, timer
+from quaddeploy import (
+    __version__,
+    config,
+    notify,
+    preflight,
+    reconcile,
+    registry,
+    release,
+    status,
+    timer,
+)
 from quaddeploy.gitrepo import UntrustedCommitError
 from quaddeploy.health import HealthError
 from quaddeploy.release import UnmanagedFileError
@@ -157,10 +167,8 @@ def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int
         return 2
     if runner is None:
         runner = run
-        # cosign does not read Podman's saved logins. This variable makes both tools
-        # use the same credentials file.
         if cfg.registry_authfile is not None:
-            runner = with_env({"REGISTRY_AUTH_FILE": str(cfg.registry_authfile)})
+            runner = with_env(registry.credentials_env(cfg.registry_authfile, cfg.state_dir))
     if args.command == "init":
         return _init(runner, config_path, args.schedule)
     if args.command == "sync":

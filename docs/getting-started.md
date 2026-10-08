@@ -293,7 +293,7 @@ Then tell QuadDeploy to use that file:
 authfile = "~/.config/containers/auth.json"
 ```
 
-The setting is needed even though Podman finds that file by itself. cosign does not read it, so without the setting the signature check fails with `UNAUTHORIZED`. A plain `podman login`, with no `--authfile`, works for both tools but is forgotten when the host reboots.
+The setting is needed even though Podman finds that file by itself. cosign does not read it, so without the setting the signature check fails with `UNAUTHORIZED`. A plain `podman login`, with no `--authfile`, works for both tools but is forgotten when the host reboots. [Architecture](architecture.md#both-tools-read-one-credentials-file) has the details.
 
 Run `quaddeploy preflight` again after either change. It checks that the key and the credentials file exist, and that the repo can be read.
 
@@ -316,6 +316,7 @@ Start with `quaddeploy status`, then `journalctl --user -u quaddeploy` for the a
 | What you see | Cause | Fix |
 |---|---|---|
 | `signature check failed: ... no signatures found` | The image was never signed | Check that the `image` workflow passed |
+| `no signatures found`, but the `image` workflow passed | The host's cosign is older than the one that signed. cosign 2.5 cannot see a signature made by cosign 3.1 | Install the same major version of cosign on the host as CI uses, or a newer one |
 | `signature check failed`, and the message mentions identities | The image was signed by a different workflow, branch or repo | Make `certificate_identity` match the workflow that signed it |
 | `is not signed by a trusted key` | The newest commit is unsigned, or signed by a key that is not in `allowed_signers` | Sign the commit with a listed key. A merge made on GitHub does not count |
 | `signature check failed`, and the message says `UNAUTHORIZED` | The image is private and cosign has no credentials | Set `authfile` in a `[registry]` section. See [Private repos and images](#private-repos-and-images) |

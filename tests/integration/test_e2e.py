@@ -16,13 +16,14 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import pytest
 from conftest import Webhook
 
-from quaddeploy import cli, config
+from quaddeploy import cli, config, registry
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("QUADDEPLOY_E2E") != "1", reason="set QUADDEPLOY_E2E=1 to run"
@@ -246,7 +247,7 @@ class Host:
             ref,
         )
         pinned = f"{PRIVATE_IMAGE}@{digest_file.read_text().strip()}"
-        self.sign(pinned, REGISTRY_AUTH_FILE=str(authfile))
+        self.sign(pinned, **registry.credentials_env(authfile, self.work / "signing"))
 
     def quaddeploy(self, *args: str) -> int:
         return cli.main(["--config", str(self.config), *args])
@@ -375,19 +376,42 @@ def test_a_manual_rollback_returns_to_the_previous_release(host: Host) -> None:
     assert sh("systemctl", "--user", "is-active", SERVICE) == "active"
 
 
+@contextmanager
+def unrelated_docker_config() -> Iterator[None]:
+    """Make sure a Docker config with no login for the test registry exists.
+
+    Its presence makes cosign ignore REGISTRY_AUTH_FILE. GitHub's runners have one. Adding
+    it here keeps the test meaningful on hosts that do not.
+    """
+    path = Path.home() / ".docker" / "config.json"
+    if path.exists():
+        yield
+        return
+    made_folder = not path.parent.exists()
+    path.parent.mkdir(exist_ok=True)
+    path.write_text('{"auths": {}}')
+    try:
+        yield
+    finally:
+        path.unlink()
+        if made_folder:
+            path.parent.rmdir()
+
+
 def test_a_private_image_deploys_once_the_credentials_file_is_set(host: Host) -> None:
     authfile = host.start_private_registry()
     host.publish_private("private", authfile)
     host.commit_unit("stable", image=PRIVATE_IMAGE)
 
-    # Without credentials, cosign cannot read the signature and nothing is deployed.
-    assert host.quaddeploy("sync") == 1
-    assert "signature check failed" in host.status()["error"]
-    assert http_get("/") == (200, "QuadDeploy demo, version v1")
+    with unrelated_docker_config():
+        # Without credentials, cosign cannot read the signature and nothing is deployed.
+        assert host.quaddeploy("sync") == 1
+        assert "signature check failed" in host.status()["error"]
+        assert http_get("/") == (200, "QuadDeploy demo, version v1")
 
-    host.config.write_text(host.config.read_text() + f'[registry]\nauthfile = "{authfile}"\n')
+        host.config.write_text(host.config.read_text() + f'[registry]\nauthfile = "{authfile}"\n')
 
-    assert host.quaddeploy("sync") == 0
+        assert host.quaddeploy("sync") == 0
     assert http_get("/") == (200, "QuadDeploy demo, version private")
     assert f"Image={PRIVATE_IMAGE}@sha256:" in host.installed_unit()
     assert host.webhook.events()[-2:] == ["failed", "recovered"]

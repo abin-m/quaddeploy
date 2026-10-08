@@ -34,3 +34,7 @@ The first version. It deploys Quadlet unit files from a Git repo to one host.
 
 - Rocky Linux 10.2 on arm64, with Podman 5.8 and cosign 3.1.
 - Ubuntu 24.04 on amd64, with Podman 4.9 and cosign 2.5, in CI.
+
+### Known limits
+
+- The host's cosign must be the same major version as the one that signed, or newer. cosign 2.5 cannot see a signature made by cosign 3.1. cosign 3.1 reads both.

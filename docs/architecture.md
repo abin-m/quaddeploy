@@ -109,9 +109,12 @@ For a private image, cosign must read the signature and Podman must pull the ima
 |---|---|---|---|
 | `podman login` | Reads them | Reads them | No |
 | `podman login --authfile ~/.config/containers/auth.json` | Does not | Reads them | Yes |
-| The `REGISTRY_AUTH_FILE` variable, pointing at any file | Reads them | Reads them | Yes |
+| The `REGISTRY_AUTH_FILE` variable, pointing at any file | Only if the user has no `~/.docker/config.json` | Reads them | Yes |
+| The `DOCKER_CONFIG` variable, pointing at a folder with `config.json` | Reads them | Reads them | Yes |
 
-The first row works until the host restarts. The second fails at the signature check. So the agent takes one file from `registry.authfile` and sets `REGISTRY_AUTH_FILE` for every command it runs.
+The first row works until the host restarts. The second fails at the signature check. The third fails on any host that has a Docker config file, even an empty one, which includes GitHub's runners.
+
+So the agent takes one file from `registry.authfile` and sets both variables for every command it runs. `DOCKER_CONFIG` needs a folder holding a file named `config.json`, so the agent keeps a link with that name in its state folder.
 
 ### Failure is visible in systemd
 
