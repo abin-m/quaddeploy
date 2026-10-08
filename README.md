@@ -107,7 +107,14 @@ quaddeploy init
 
 ## Sign images in CI
 
-[.github/workflows/image.yml](.github/workflows/image.yml) builds the demo app, pushes it to GitHub Container Registry and signs it with cosign. The signature is tied to the workflow's identity, so there is no signing key to store.
+Both examples build the demo app, push it to the platform's registry and sign it with cosign. The signature is tied to the pipeline's identity, so there is no signing key to store.
+
+| Platform | Example | Tested |
+|---|---|---|
+| GitHub Actions | [.github/workflows/image.yml](.github/workflows/image.yml) | Yes, it builds this repo's demo image |
+| GitLab CI | [examples/gitlab-ci.yml](examples/gitlab-ci.yml) | No, it follows GitLab's documented template but has not been run |
+
+Each file's comments give the `[verify]` settings that trust it.
 
 ## Limits
 

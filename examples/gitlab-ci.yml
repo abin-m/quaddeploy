@@ -1,0 +1,42 @@
+# Build the demo image, push it to the GitLab container registry and sign it with cosign.
+#
+# Copy this file to .gitlab-ci.yml at the root of a project on GitLab.com.
+# Keyless signing needs GitLab.com and cosign 2.0.1 or later.
+#
+# The signature is tied to this pipeline's identity, so there is no signing key to store.
+# On the host, trust that identity in ~/.config/quaddeploy/config.toml:
+#
+#   [verify]
+#   certificate_identity = "https://gitlab.com/alice/app//.gitlab-ci.yml@refs/heads/main"
+#   certificate_oidc_issuer = "https://gitlab.com"
+#
+# The double slash before .gitlab-ci.yml is required.
+
+stages:
+  - build
+
+build-image:
+  stage: build
+  image: docker:cli
+  services:
+    - docker:dind
+  rules:
+    # Sign only what is built from the default branch, which is the identity the host trusts.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  variables:
+    IMAGE: $CI_REGISTRY_IMAGE/quaddeploy-demo:main
+    COSIGN_YES: "true"
+  # cosign reads this token to prove which pipeline is signing.
+  id_tokens:
+    SIGSTORE_ID_TOKEN:
+      aud: sigstore
+  before_script:
+    - apk add --update cosign
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    # The image is built for the runner's architecture. For an arm64 host, use an arm64 runner.
+    - docker build --pull --build-arg "APP_VERSION=$CI_COMMIT_SHA" -t "$IMAGE" -f examples/demo-app/Containerfile examples/demo-app
+    - docker push "$IMAGE"
+    # Sign the digest, not the tag, so the signature names exactly what was pushed.
+    - IMAGE_DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")"
+    - cosign sign "$IMAGE_DIGEST"
