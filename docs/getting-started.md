@@ -227,6 +227,25 @@ loginctl enable-linger
 
 `init` installs a timer that runs `sync` every two minutes. `enable-linger` keeps your services and the timer running after you log out, and starts them at boot.
 
+### 10. Optional: get told when a deploy fails
+
+A rollback at night is silent unless something tells you. Add a webhook to the config:
+
+```toml
+[notify]
+url = "https://hooks.example.com/your-webhook"
+```
+
+Then send a test message:
+
+```sh
+quaddeploy notify
+```
+
+The agent posts one JSON message when a deploy fails, rolls back or recovers. The [README](../README.md#notifications) lists the events and the message format.
+
+Treat the URL as a secret. Anyone who has it can post to your channel.
+
 ## Part 3: ship a change
 
 Change your app, commit and push. Nothing else is needed. To watch it arrive, run this on the host:

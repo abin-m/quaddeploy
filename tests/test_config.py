@@ -130,3 +130,19 @@ def test_load_reads_allowed_signers(tmp_path: Path) -> None:
 def test_load_rejects_a_bad_allowed_signers_value(tmp_path: Path, value: str) -> None:
     with pytest.raises(config.ConfigError):
         config.load(_write(tmp_path, REPO + f"allowed_signers = {value}\n" + VERIFY), ENV)
+
+
+def test_notifications_are_off_by_default(tmp_path: Path) -> None:
+    assert config.load(_write(tmp_path, MINIMAL), ENV).notify_url is None
+
+
+def test_load_reads_a_webhook_url(tmp_path: Path) -> None:
+    text = MINIMAL + '[notify]\nurl = "https://hooks.example.com/abc"\n'
+
+    assert config.load(_write(tmp_path, text), ENV).notify_url == "https://hooks.example.com/abc"
+
+
+@pytest.mark.parametrize("value", ['""', "1", '"file:///etc/passwd"', '"hooks.example.com"'])
+def test_load_rejects_a_bad_webhook_url(tmp_path: Path, value: str) -> None:
+    with pytest.raises(config.ConfigError):
+        config.load(_write(tmp_path, MINIMAL + f"[notify]\nurl = {value}\n"), ENV)

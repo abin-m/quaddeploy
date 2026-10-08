@@ -30,6 +30,7 @@ Run all four checks before you commit. `.github/workflows/ci.yml` runs the same 
 | `src/quaddeploy/release.py` | Release folders, the state pointers, installing files |
 | `src/quaddeploy/status.py` | The status file written after each run |
 | `src/quaddeploy/timer.py` | The systemd timer that `init` installs |
+| `src/quaddeploy/notify.py` | Decide whether a run is news, and post it to a webhook |
 | `src/quaddeploy/preflight.py` | The host checks behind `preflight`, each with a fix |
 | `examples/` | Demo app, demo unit file, a sample config and a GitLab CI example |
 | `tests/` | Unit tests |

@@ -10,7 +10,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from quaddeploy import __version__, config, preflight, reconcile, release, status, timer
+from quaddeploy import __version__, config, notify, preflight, reconcile, release, status, timer
 from quaddeploy.gitrepo import UntrustedCommitError
 from quaddeploy.health import HealthError
 from quaddeploy.release import UnmanagedFileError
@@ -43,6 +43,7 @@ def _parser() -> argparse.ArgumentParser:
     commands.add_parser("rollback", help="return to the release before the current one")
     commands.add_parser("verify", help="check the signatures of the repo's images")
     commands.add_parser("preflight", help="check that this host is ready, and say what is missing")
+    commands.add_parser("notify", help="send a test message to the configured webhook")
     init = commands.add_parser("init", help="install the systemd timer that runs sync")
     init.add_argument(
         "--schedule",
@@ -103,6 +104,19 @@ def _init(runner: Runner, config_path: Path, schedule: str) -> int:
     return 0
 
 
+def _notify_test(cfg: config.Config) -> int:
+    if cfg.notify_url is None:
+        log.error("no webhook is configured. Set url in the [notify] section of the config")
+        return 1
+    try:
+        notify.send(cfg.notify_url, notify.payload("test", {}))
+    except notify.NotifyError as exc:
+        log.error("the webhook did not accept the message: %s", exc)
+        return 1
+    print("Sent a test notification.")
+    return 0
+
+
 def _preflight(runner: Runner, config_path: Path) -> int:
     checks = preflight.run_checks(runner, config_path)
     for check in checks:
@@ -144,7 +158,12 @@ def main(argv: Sequence[str] | None = None, runner: Runner = run) -> int:
     if args.command == "init":
         return _init(runner, config_path, args.schedule)
     if args.command == "sync":
-        return _recorded(cfg, lambda: _sync(cfg, runner, args.force))
+        previous = status.read(cfg.state_dir)
+        code = _recorded(cfg, lambda: _sync(cfg, runner, args.force))
+        notify.report(cfg.notify_url, previous, status.read(cfg.state_dir))
+        return code
+    if args.command == "notify":
+        return _notify_test(cfg)
     if args.command == "rollback":
         return _recorded(cfg, lambda: _rollback(cfg, runner))
     if args.command == "verify":

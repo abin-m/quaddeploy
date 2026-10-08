@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from conftest import Webhook
 
 from quaddeploy import cli, config
 
@@ -61,6 +62,7 @@ def http_get(path: str) -> tuple[int, str]:
 class Host:
     def __init__(self, work: Path) -> None:
         self.work = work
+        self.webhook = Webhook()
         self.repo = work / "repo"
         self.state = work / "state"
         self.config = work / "config.toml"
@@ -69,11 +71,13 @@ class Host:
             f'[paths]\nstate_dir = "{self.state}"\n'
             f'[verify]\nkey = "{work / "cosign.pub"}"\n'
             f'[health]\ntimeout = 30\ninterval = 1\nurls = ["http://127.0.0.1:{PORT}/healthz"]\n'
+            f'[notify]\nurl = "{self.webhook.url}"\n'
         )
         # The agent's default: the current user's real Quadlet folder.
         self.unit_dir = config.load(self.config).unit_dir
 
     def set_up(self) -> None:
+        self.webhook.start()
         self.remove_unit()
         sh("podman", "rm", "-f", REGISTRY_CONTAINER, check=False)
         publish = ["-p", "127.0.0.1:5000:5000"]
@@ -95,6 +99,7 @@ class Host:
         (self.work / "allowed_signers").write_text(f"e2e@example.com {public}")
 
     def tear_down(self) -> None:
+        self.webhook.stop()
         self.remove_unit()
         sh("podman", "rm", "-f", REGISTRY_CONTAINER, check=False)
 
@@ -227,6 +232,7 @@ def test_an_unsigned_image_is_refused(host: Host) -> None:
     assert "signature check failed" in host.status()["error"]
     assert host.installed_unit() == before
     assert http_get("/") == (200, "QuadDeploy demo, version v2")
+    assert host.webhook.events() == ["failed"]
 
 
 def test_an_unsigned_commit_is_refused(host: Host) -> None:
@@ -238,6 +244,9 @@ def test_an_unsigned_commit_is_refused(host: Host) -> None:
 
     assert "not signed by a trusted key" in host.status()["error"]
     assert http_get("/") == (200, "QuadDeploy demo, version v2")
+    # A different error is news, so it is reported even though the last run failed too.
+    assert host.webhook.events() == ["failed", "failed"]
+    assert "not signed by a trusted key" in host.webhook.received[-1]["text"]
 
 
 def test_an_unhealthy_release_is_rolled_back(host: Host) -> None:
@@ -250,6 +259,7 @@ def test_an_unhealthy_release_is_rolled_back(host: Host) -> None:
     assert host.installed_unit() == before
     assert http_get("/healthz") == (200, "ok")
     assert http_get("/") == (200, "QuadDeploy demo, version v2")
+    assert host.webhook.events() == ["failed", "failed", "rolled_back"]
 
 
 def test_a_rejected_release_is_not_retried(host: Host) -> None:
@@ -257,6 +267,8 @@ def test_a_rejected_release_is_not_retried(host: Host) -> None:
 
     assert host.status()["result"] == "rejected"
     assert http_get("/") == (200, "QuadDeploy demo, version v2")
+    # The rejection belongs to the rollback that was already reported.
+    assert len(host.webhook.received) == 3
 
 
 def test_a_manual_rollback_returns_to_the_previous_release(host: Host) -> None:

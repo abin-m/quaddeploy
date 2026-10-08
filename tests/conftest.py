@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from threading import Thread
+from typing import Any
 
 import pytest
 
@@ -78,3 +81,44 @@ def cfg(tmp_path: Path) -> Config:
         verify=VerifyConfig(key=Path("/etc/quaddeploy/cosign.pub")),
         health=HealthConfig(timeout=5, interval=0),
     )
+
+
+class Webhook:
+    """A local HTTP server that records the JSON bodies posted to it."""
+
+    def __init__(self) -> None:
+        self.received: list[dict[str, Any]] = []
+        self.status = 204
+        hook = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                body = self.rfile.read(int(self.headers["Content-Length"]))
+                hook.received.append(json.loads(body))
+                self.send_response(hook.status)
+                self.end_headers()
+
+            def log_message(self, format: str, *args: Any) -> None:
+                pass
+
+        self.server = HTTPServer(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self.server.server_port}/hook"
+        self._thread = Thread(target=self.server.serve_forever, daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+
+    def events(self) -> list[str]:
+        return [body["event"] for body in self.received]
+
+
+@pytest.fixture
+def webhook() -> Iterator[Webhook]:
+    hook = Webhook()
+    hook.start()
+    yield hook
+    hook.stop()

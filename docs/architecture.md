@@ -103,7 +103,7 @@ Unit files are installed flat into the user's Quadlet folder, beside any the ope
 
 ### Failure is visible in systemd
 
-`sync` exits non-zero when it fails, rolls back or skips a rejected release. The timer's service then shows as failed, so `systemctl --user status quaddeploy` and any existing unit monitoring report it. The agent has no alerting of its own.
+`sync` exits non-zero when it fails, rolls back or skips a rejected release. The timer's service then shows as failed, so `systemctl --user status quaddeploy` and any existing unit monitoring report it. The agent can also post to a webhook. It compares each run's result with the last one and reports only a change: a new failure, a rollback or a recovery. Without that comparison, a rejected release would send a message every two minutes. A webhook that is down is logged and otherwise ignored, so alerting can never break a deploy.
 
 ## State on the host
 

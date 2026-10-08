@@ -41,6 +41,8 @@ class Config:
     health: HealthConfig = HealthConfig()
     # SSH keys allowed to sign commits of the config repo. None turns the check off.
     allowed_signers: Path | None = None
+    # Webhook that is told when a deploy fails, rolls back or recovers. None turns it off.
+    notify_url: str | None = None
 
 
 def _xdg(env: Mapping[str, str], var: str, fallback: str) -> Path:
@@ -94,6 +96,15 @@ def _verify(table: Mapping[str, Any]) -> VerifyConfig:
     )
 
 
+def _notify(table: Mapping[str, Any]) -> str | None:
+    if "url" not in table:
+        return None
+    url = _string(table, "url", "notify")
+    if not url.startswith(("http://", "https://")):
+        raise ConfigError("notify.url must start with http:// or https://")
+    return url
+
+
 def _health(table: Mapping[str, Any]) -> HealthConfig:
     urls = table.get("urls", [])
     if not isinstance(urls, list) or not all(isinstance(url, str) for url in urls):
@@ -143,4 +154,5 @@ def load(path: Path, env: Mapping[str, str] = os.environ) -> Config:
         verify=_verify(_table(data, "verify")),
         health=_health(_table(data, "health")),
         allowed_signers=allowed_signers,
+        notify_url=_notify(_table(data, "notify")),
     )

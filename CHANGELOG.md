@@ -16,6 +16,7 @@ The first version. It deploys Quadlet unit files from a Git repo to one host.
 - `init` installs a systemd user timer that runs `sync`.
 - `status` shows the last result and any unit files edited by hand.
 - `rollback` returns to the release before the current one.
+- `notify` sends a test message to the configured webhook.
 
 ### Behaviour
 
@@ -24,6 +25,7 @@ The first version. It deploys Quadlet unit files from a Git repo to one host.
 - With `repo.allowed_signers` set, the config repo's newest commit must carry an SSH signature from a listed key.
 - A release that fails to start or fails its health check is rolled back and not retried.
 - Unit files that the agent did not install are never overwritten.
+- With a `[notify]` URL set, a webhook is told when a deploy fails, rolls back or recovers. A standing failure is reported once.
 
 ### Tested on
 

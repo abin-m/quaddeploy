@@ -104,6 +104,10 @@ With keyless signing, the trusted identity is a CI workflow. Anyone who can chan
 
 The agent verifies the `Image=` key. A unit can name an image in other ways, such as `Mount=type=image,...`, and those are not verified or pinned.
 
+### What notifications reveal
+
+A notification carries the host name, release ids, the commit hash and the error text, which can include image names and URLs. It goes to whoever runs the webhook. The webhook URL sits in the config file in plain text, and anyone who reads it can post to that endpoint.
+
 ### Secrets
 
 QuadDeploy does not manage secrets. A secret written into a unit file in the repo is readable by everyone who can read the repo. Use `podman secret` on the host.

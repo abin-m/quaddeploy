@@ -30,6 +30,7 @@ It is for the case where Kubernetes is more than the problem needs.
 - **You run what was signed.** Each image is pinned to the digest that was verified.
 - **Config can be signed too.** The host can refuse any commit that a trusted key did not sign.
 - **A bad release rolls back.** Config and image return together, and the failed release is not retried.
+- **You hear about it.** A webhook is told when a deploy fails, rolls back or recovers.
 
 ## See it run
 
@@ -83,6 +84,10 @@ certificate_oidc_issuer = "https://token.actions.githubusercontent.com"
 [health]
 timeout = 60       # seconds to wait for a healthy release
 urls = ["http://127.0.0.1:8080/healthz"]
+
+# Optional: post a message here when a deploy fails, rolls back or recovers.
+[notify]
+url = "https://hooks.example.com/your-webhook"
 ```
 
 To verify with a public key instead, set `key = "/path/to/cosign.pub"` in `[verify]`. Image names must include their registry, such as `ghcr.io/alice/app:main`.
@@ -109,8 +114,36 @@ New to this? [Deploy your own app](docs/getting-started.md) goes from an empty r
 | `quaddeploy init` | Install a systemd timer that runs `sync` every two minutes |
 | `quaddeploy status` | Show the last result and any hand-edited unit files |
 | `quaddeploy rollback` | Return to the release before the current one |
+| `quaddeploy notify` | Send a test message to the configured webhook |
 
 `sync` exits non-zero when it fails, rolls back or skips a rejected release, so the timer's service shows as failed in `systemctl --user status quaddeploy`.
+
+## Notifications
+
+With a `[notify]` URL set, `sync` posts a JSON message when something changes:
+
+| Event | When |
+|---|---|
+| `failed` | A run fails, for example on an unsigned image. A repeat of the same error is not reported again |
+| `rolled_back` | A release was deployed, failed and was rolled back |
+| `rejected` | The repo asks for a release that was rejected, and that was not already reported as a rollback |
+| `recovered` | A run succeeds after any of the above |
+
+The timer runs every two minutes, so a standing problem is reported once, not on every run.
+
+```json
+{
+  "text": "QuadDeploy on web1: release 8fe7cbffba7b failed and was rolled back to 940c091e9371. http://127.0.0.1:8080/healthz did not answer with success",
+  "event": "rolled_back",
+  "host": "web1",
+  "result": "rolled_back",
+  "release": "940c091e9371",
+  "rejected": "8fe7cbffba7b",
+  "error": "http://127.0.0.1:8080/healthz did not answer with success"
+}
+```
+
+The `text` field is one readable line, which is the shape chat webhooks commonly take. It has been tested against a local HTTP server, not against a hosted chat service. A webhook that is down never changes the result of a deploy.
 
 ## Sign images in CI
 

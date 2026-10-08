@@ -53,6 +53,7 @@ def config_file(tmp_path: Path) -> Path:
         "[verify]\n"
         'certificate_identity = "https://git.example.com/alice/app/workflow@refs/heads/main"\n'
         'certificate_oidc_issuer = "https://token.example.com"\n'
+        '[notify]\nurl = "https://hooks.example.com/abc"\n'
     )
     return path
 
@@ -222,3 +223,12 @@ def test_a_missing_allowed_signers_file_fails(tools: Tools, config_file: Path) -
     check = _find(preflight.run_checks(tools, config_file), "allowed signers file")
 
     assert check.level == preflight.FAIL
+
+
+def test_no_webhook_is_a_warning(tools: Tools, config_file: Path) -> None:
+    config_file.write_text(config_file.read_text().split("[notify]")[0])
+
+    check = _find(preflight.run_checks(tools, config_file), "nobody is told")
+
+    assert check.level == preflight.WARN
+    assert "quaddeploy notify" in check.fix

@@ -145,6 +145,16 @@ def _config(run: Runner, config_path: Path) -> list[Check]:
             )
         )
     checks.append(_signers(cfg))
+    if cfg.notify_url is None:
+        checks.append(
+            Check(
+                WARN,
+                "nobody is told when a deploy fails or rolls back",
+                "Set url in a [notify] section, then run: quaddeploy notify",
+            )
+        )
+    else:
+        checks.append(Check(OK, "failures are reported to a webhook"))
     repo = _repo(run, cfg)
     if repo is not None:
         checks.append(repo)
