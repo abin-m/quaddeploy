@@ -7,6 +7,7 @@ When you finish:
 - every push to `main` builds and signs a new image
 - the host picks it up within two minutes
 - an unsigned image is refused, and a broken release is rolled back
+- optionally, a commit that you did not sign is refused too
 
 ## Before you start
 
@@ -151,7 +152,33 @@ https://github.com/OWNER/REPO/.github/workflows/FILE@refs/heads/BRANCH
 
 Leave `[health]` out if your app has no health URL. QuadDeploy then checks only that the service stays running.
 
-### 6. Check the host
+### 6. Optional: accept only commits you signed
+
+Step 5 makes the host trust one workflow for images. The unit file itself is still unprotected: anyone who can push to `main` can change what runs. This step closes that.
+
+On your own machine, sign your commits with an SSH key. Run this in the app's repo:
+
+```sh
+git config gpg.format ssh
+git config user.signingkey ~/.ssh/id_ed25519.pub
+git config commit.gpgsign true
+```
+
+On the host, list the keys to trust in `~/.config/quaddeploy/allowed_signers`. Each line is an email address followed by a public key:
+
+```
+alice@example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI...
+```
+
+Then add one line to the `[repo]` section of the config:
+
+```toml
+allowed_signers = "~/.config/quaddeploy/allowed_signers"
+```
+
+From now on, the newest commit on `main` must be signed by a listed key. Commits made in the GitHub web interface, including pull request merges, are signed by GitHub and are refused. Merge on your machine and push.
+
+### 7. Check the host
 
 ```sh
 quaddeploy preflight
@@ -167,6 +194,7 @@ ok    systemd user session is running
 warn  lingering is off, so services and the timer stop when you log out
       Run: loginctl enable-linger
 ok    config /home/deploy/.config/quaddeploy/config.toml is valid
+ok    commits must be signed by a key in /home/deploy/.config/quaddeploy/allowed_signers
 ok    the repo is reachable and has branch main
 warn  the sync timer is not installed
       After a first 'quaddeploy sync', run: quaddeploy init
@@ -174,9 +202,9 @@ warn  the sync timer is not installed
 This host is ready. Next: quaddeploy verify
 ```
 
-A line marked `FAIL` must be fixed. A line marked `warn` can wait until step 8.
+A line marked `FAIL` must be fixed. A line marked `warn` can wait until step 9.
 
-### 7. Deploy once by hand
+### 8. Deploy once by hand
 
 ```sh
 quaddeploy verify
@@ -190,7 +218,7 @@ curl http://127.0.0.1:8080/
 systemctl --user status app
 ```
 
-### 8. Hand over to the timer
+### 9. Hand over to the timer
 
 ```sh
 quaddeploy init
@@ -219,6 +247,7 @@ Start with `quaddeploy status`, then `journalctl --user -u quaddeploy` for the a
 |---|---|---|
 | `signature check failed: ... no signatures found` | The image was never signed | Check that the `image` workflow passed |
 | `signature check failed`, and the message mentions identities | The image was signed by a different workflow, branch or repo | Make `certificate_identity` match the workflow that signed it |
+| `is not signed by a trusted key` | The newest commit is unsigned, or signed by a key that is not in `allowed_signers` | Sign the commit with a listed key. A merge made on GitHub does not count |
 | `image must include its registry` | The unit file uses a short image name | Write the full name, such as `ghcr.io/alice/app:main` |
 | `Exec format error` in the service's journal | The image was built for another CPU architecture | Build for the host's architecture. The workflow above builds both |
 | `did not answer with success`, then a rollback | The health URL did not return 200 in time | Check the URL and port. For a slow start, raise `timeout` in `[health]` |

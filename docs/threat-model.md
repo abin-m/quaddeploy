@@ -6,7 +6,7 @@ This page says what QuadDeploy protects against, what it trusts and what it leav
 
 | Trusted party | Why it must be trusted |
 |---|---|
-| Everyone who can push to the config repo's branch | They decide which units run and with which options |
+| The holders of the keys in `allowed_signers`, or everyone who can push to the config branch if that is not set | They decide which units run and with which options |
 | The signer named in `[verify]` | An image they sign will run |
 | The host, its root user and the deploy user | They can change the agent, its config and its state |
 | The `cosign`, `git` and `podman` binaries on the host | The agent acts on what they report |
@@ -46,6 +46,12 @@ The registry is **not** trusted. Neither is the network between the host and the
 
 *Defence:* the agent refuses `.kube` units, whose images are named in a separate YAML file, and `.build` units, which build an image on the host. It verifies `Image=` in `.container`, `.image` and `.volume` files.
 
+### An unapproved change to the config repo
+
+*Threat:* someone who gains push access to the config branch changes a unit file, or a compromised Git host serves a different history.
+
+*Defence:* when `repo.allowed_signers` is set, the agent accepts a fetched commit only if it is signed by one of the listed SSH keys. It checks before it checks out, so the files of an unsigned commit never replace the trusted ones. This defence is optional. See the first gap below.
+
 ### Stolen deploy credentials
 
 *Threat:* an attacker takes over CI and uses its credentials to reach the host.
@@ -74,11 +80,17 @@ The registry is **not** trusted. Neither is the network between the host and the
 
 These are real gaps. Some are choices and some are work not yet done.
 
-### Unit files are code, and they are not signed
+### Unit files are code, and checking them is optional
 
-Image signing covers images only. Anyone who can push to the config branch can add `Volume=` lines that mount the user's home directory, or an `ExecStartPre=` line that runs any command on the host as the deploy user. They cannot run an unsigned image, but they do not need one.
+A unit file can mount the user's home directory, or run any command on the host through `ExecStartPre=`. Image signing does not cover that.
 
-The agent fetches the repo over HTTPS and does not verify commit signatures. Protect the branch: require reviews, restrict who can push, and require signed commits on the hosting side.
+Commit verification does, but it is off unless `repo.allowed_signers` is set. Without it, anyone who can push to the config branch controls the host. `quaddeploy preflight` warns about this.
+
+With it on, three limits remain:
+
+- **A trusted key can do anything.** The check proves who approved a commit, not that the commit is safe. Review still matters.
+- **Only the newest commit is checked.** A trusted signature on it vouches for everything below it, because a commit's hash covers its whole history.
+- **Only SSH signatures count.** Commits that GitHub creates in the browser, such as pull request merges, carry GitHub's own GPG signature and are refused. Merge locally and push a commit you signed.
 
 ### An old signed image can be replayed
 

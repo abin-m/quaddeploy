@@ -35,7 +35,8 @@ UNIT = "qd-e2e.container"
 SERVICE = "qd-e2e.service"
 PORT = 18080
 DEMO_APP = Path(__file__).parents[2] / "examples" / "demo-app"
-GIT = ["git", "-c", "user.name=e2e", "-c", "user.email=e2e@example.com"]
+# The developer's own Git hooks must not run on the test's commits.
+GIT = ["git", "-c", "user.name=e2e", "-c", "user.email=e2e@example.com", "-c", "core.hooksPath="]
 
 
 def sh(*argv: str, cwd: Path | None = None, check: bool = True) -> str:
@@ -64,7 +65,7 @@ class Host:
         self.state = work / "state"
         self.config = work / "config.toml"
         self.config.write_text(
-            f'[repo]\nurl = "{self.repo}"\n'
+            f'[repo]\nurl = "{self.repo}"\nallowed_signers = "{work / "allowed_signers"}"\n'
             f'[paths]\nstate_dir = "{self.state}"\n'
             f'[verify]\nkey = "{work / "cosign.pub"}"\n'
             f'[health]\ntimeout = 30\ninterval = 1\nurls = ["http://127.0.0.1:{PORT}/healthz"]\n'
@@ -87,6 +88,11 @@ class Host:
         )
         (self.repo / "deploy").mkdir(parents=True)
         sh("git", "init", "-q", "-b", "main", str(self.repo))
+        # The key that signs the config repo's commits, and the host's list of trusted keys.
+        key = self.work / "commit_key"
+        sh("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key))
+        public = key.with_suffix(".pub").read_text()
+        (self.work / "allowed_signers").write_text(f"e2e@example.com {public}")
 
     def tear_down(self) -> None:
         self.remove_unit()
@@ -124,14 +130,26 @@ class Host:
                 capture_output=True,
             )
 
-    def commit_unit(self, tag: str, *, healthy: bool = True) -> None:
+    def commit_unit(self, tag: str, *, healthy: bool = True, signed: bool = True) -> None:
         """Commit a unit file to the config repo that runs IMAGE:tag."""
         lines = ["[Container]", f"Image={IMAGE}:{tag}", f"PublishPort=127.0.0.1:{PORT}:8080"]
         if not healthy:
             lines.append("Environment=HEALTHY=0")
         (self.repo / "deploy" / UNIT).write_text("\n".join(lines) + "\n")
         sh(*GIT, "-C", str(self.repo), "add", "-A")
-        sh(*GIT, "-C", str(self.repo), "commit", "-q", "-m", f"run {tag}, healthy={healthy}")
+        signing = ["-c", "commit.gpgsign=false"]
+        if signed:
+            key = str(self.work / "commit_key.pub")
+            signing = [
+                "-c",
+                "gpg.format=ssh",
+                "-c",
+                f"user.signingkey={key}",
+                "-c",
+                "commit.gpgsign=true",
+            ]
+        message = f"run {tag}, healthy={healthy}, signed={signed}"
+        sh(*GIT, *signing, "-C", str(self.repo), "commit", "-q", "--allow-empty", "-m", message)
 
     def quaddeploy(self, *args: str) -> int:
         return cli.main(["--config", str(self.config), *args])
@@ -208,6 +226,17 @@ def test_an_unsigned_image_is_refused(host: Host) -> None:
 
     assert "signature check failed" in host.status()["error"]
     assert host.installed_unit() == before
+    assert http_get("/") == (200, "QuadDeploy demo, version v2")
+
+
+def test_an_unsigned_commit_is_refused(host: Host) -> None:
+    # This commit asks for the release that is already running. Without the commit check,
+    # sync would report "unchanged" and exit 0.
+    host.commit_unit("stable", signed=False)
+
+    assert host.quaddeploy("sync") == 1
+
+    assert "not signed by a trusted key" in host.status()["error"]
     assert http_get("/") == (200, "QuadDeploy demo, version v2")
 
 

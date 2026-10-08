@@ -11,6 +11,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from quaddeploy import __version__, config, preflight, reconcile, release, status, timer
+from quaddeploy.gitrepo import UntrustedCommitError
 from quaddeploy.health import HealthError
 from quaddeploy.release import UnmanagedFileError
 from quaddeploy.runner import CommandError, Runner, run
@@ -20,6 +21,7 @@ log = logging.getLogger("quaddeploy")
 
 _ERRORS = (
     CommandError,
+    UntrustedCommitError,
     reconcile.ReconcileError,
     UnmanagedFileError,
     VerifyError,

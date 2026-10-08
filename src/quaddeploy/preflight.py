@@ -114,6 +114,22 @@ def _repo(run: Runner, cfg: config.Config) -> Check | None:
     return Check(OK, f"the repo is reachable and has branch {cfg.branch}")
 
 
+def _signers(cfg: config.Config) -> Check:
+    if cfg.allowed_signers is None:
+        return Check(
+            WARN,
+            "commits are not verified, so anyone who can push to the branch controls this host",
+            "Set repo.allowed_signers. See docs/getting-started.md.",
+        )
+    if not cfg.allowed_signers.is_file():
+        return Check(
+            FAIL,
+            f"allowed signers file {cfg.allowed_signers} does not exist",
+            "Create it with one line per trusted key: alice@example.com ssh-ed25519 AAAA...",
+        )
+    return Check(OK, f"commits must be signed by a key in {cfg.allowed_signers}")
+
+
 def _config(run: Runner, config_path: Path) -> list[Check]:
     try:
         cfg = config.load(config_path)
@@ -128,6 +144,7 @@ def _config(run: Runner, config_path: Path) -> list[Check]:
                 "Copy the cosign public key there, or correct verify.key.",
             )
         )
+    checks.append(_signers(cfg))
     repo = _repo(run, cfg)
     if repo is not None:
         checks.append(repo)

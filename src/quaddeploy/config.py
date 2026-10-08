@@ -39,6 +39,8 @@ class Config:
     unit_dir: Path
     verify: VerifyConfig
     health: HealthConfig = HealthConfig()
+    # SSH keys allowed to sign commits of the config repo. None turns the check off.
+    allowed_signers: Path | None = None
 
 
 def _xdg(env: Mapping[str, str], var: str, fallback: str) -> Path:
@@ -125,6 +127,11 @@ def load(path: Path, env: Mapping[str, str] = os.environ) -> Config:
     if parts.is_absolute() or ".." in parts.parts:
         raise ConfigError("repo.path must be a relative path inside the repo")
 
+    signers = repo.get("allowed_signers")
+    allowed_signers = (
+        None if signers is None else Path(_string(repo, "allowed_signers", "repo")).expanduser()
+    )
+
     state_default = _xdg(env, "XDG_STATE_HOME", ".local/state") / "quaddeploy"
     unit_default = _xdg(env, "XDG_CONFIG_HOME", ".config") / "containers" / "systemd"
     return Config(
@@ -135,4 +142,5 @@ def load(path: Path, env: Mapping[str, str] = os.environ) -> Config:
         unit_dir=Path(_string(paths, "unit_dir", "paths", str(unit_default))).expanduser(),
         verify=_verify(_table(data, "verify")),
         health=_health(_table(data, "health")),
+        allowed_signers=allowed_signers,
     )

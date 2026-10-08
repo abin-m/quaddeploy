@@ -5,6 +5,9 @@ url = "https://github.com/abin-m/quaddeploy.git"
 branch = "main"
 path = "examples/deploy"
 
+# To accept only signed commits, list the trusted SSH keys in this file and remove the #.
+# allowed_signers = "~/.config/quaddeploy/allowed_signers"
+
 # Accept only images signed by this repo's image workflow on the main branch.
 [verify]
 certificate_identity = "https://github.com/abin-m/quaddeploy/.github/workflows/image.yml@refs/heads/main"

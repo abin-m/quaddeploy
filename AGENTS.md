@@ -23,7 +23,7 @@ Run all four checks before you commit. `.github/workflows/ci.yml` runs the same 
 | `src/quaddeploy/config.py` | Load and validate `config.toml` |
 | `src/quaddeploy/reconcile.py` | The `sync` and `rollback` steps, in order |
 | `src/quaddeploy/runner.py` | The only place that starts a subprocess |
-| `src/quaddeploy/gitrepo.py` | Clone and fetch the config repo |
+| `src/quaddeploy/gitrepo.py` | Clone and fetch the config repo, and verify the commit's signature |
 | `src/quaddeploy/quadlet.py` | Find unit files, map them to service names, read and rewrite `Image=` |
 | `src/quaddeploy/verify.py` | Run `cosign verify` and pin an image to its digest |
 | `src/quaddeploy/health.py` | Wait for units and URLs to be healthy |

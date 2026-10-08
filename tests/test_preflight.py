@@ -44,9 +44,12 @@ def tools() -> Tools:
 
 @pytest.fixture
 def config_file(tmp_path: Path) -> Path:
+    signers = tmp_path / "allowed_signers"
+    signers.write_text("alice@example.com ssh-ed25519 AAAA\n")
     path = tmp_path / "config.toml"
     path.write_text(
         '[repo]\nurl = "https://git.example.com/alice/app.git"\n'
+        f'allowed_signers = "{signers}"\n'
         "[verify]\n"
         'certificate_identity = "https://git.example.com/alice/app/workflow@refs/heads/main"\n'
         'certificate_oidc_issuer = "https://token.example.com"\n'
@@ -200,3 +203,22 @@ def test_command_exits_one_and_prints_each_fix(
     assert "FAIL  cosign is not installed" in out
     assert "      Install it: https://docs.sigstore.dev" in out
     assert "2 problems to fix" in out
+
+
+def test_unverified_commits_are_a_warning(tools: Tools, config_file: Path) -> None:
+    config_file.write_text(
+        "".join(line for line in config_file.read_text().splitlines(True) if "signers" not in line)
+    )
+
+    check = _find(preflight.run_checks(tools, config_file), "commits are not verified")
+
+    assert check.level == preflight.WARN
+    assert "allowed_signers" in check.fix
+
+
+def test_a_missing_allowed_signers_file_fails(tools: Tools, config_file: Path) -> None:
+    (config_file.parent / "allowed_signers").unlink()
+
+    check = _find(preflight.run_checks(tools, config_file), "allowed signers file")
+
+    assert check.level == preflight.FAIL

@@ -28,7 +28,9 @@ Every arrow that crosses the host boundary starts on the host. Nothing outside i
 
 ```mermaid
 flowchart TD
-    fetch[Fetch the repo] --> verify{Every image signed<br>by the trusted signer?}
+    fetch[Fetch the repo] --> commit{Commit signed by<br>a trusted key?}
+    commit -- no --> stop
+    commit -- "yes, or check is off" --> verify{Every image signed<br>by the trusted signer?}
     verify -- no --> stop[Stop. Change nothing. Exit 1]
     verify -- yes --> pin[Rewrite Image= to the signed digest]
     pin --> same{Same as the<br>current release?}
@@ -54,6 +56,14 @@ The cost is delay. A change waits for the next timer run, two minutes by default
 The agent runs `cosign verify` on each image named in the repo. If any image fails, the run stops before a single file on the host changes. There is no option to skip this.
 
 Podman can also enforce signatures through `policy.json`. QuadDeploy checks in the agent instead, for two reasons. The failure is reported by the tool that the operator is already watching. And the check returns the signed digest, which the next step needs.
+
+### Commits can be verified as well
+
+An image signature says nothing about the unit file that runs the image, and a unit file can run any command on the host.
+
+So the agent can also check the config repo. With `repo.allowed_signers` set, it runs `git verify-commit` on the fetched commit before checking it out, and accepts only an SSH signature from a listed key. It checks the newest commit only. That is enough, because a commit's hash covers every file and every commit below it.
+
+The check is optional because it rules out a common workflow. Commits that GitHub creates in the browser are signed with GitHub's key, not the author's, so they fail it.
 
 ### Images are pinned to the signed digest
 

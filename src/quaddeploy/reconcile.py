@@ -42,7 +42,9 @@ class Outcome:
 
 def desired(config: Config, run: Runner) -> Desired:
     """Fetch the repo, verify every image and return the unit files pinned to digests."""
-    commit = gitrepo.update(run, config.repo_url, config.branch, config.state_dir / "repo")
+    commit = gitrepo.update(
+        run, config.repo_url, config.branch, config.state_dir / "repo", config.allowed_signers
+    )
     deploy_dir = config.state_dir / "repo" / config.deploy_path
     if not deploy_dir.is_dir():
         raise ReconcileError(f"{config.deploy_path} is not a folder in the repo")

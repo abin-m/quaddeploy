@@ -28,6 +28,7 @@ It is for the case where Kubernetes is more than the problem needs.
 - **The host pulls.** CI holds no SSH key or token for the host.
 - **Unsigned images never run.** Every image is checked with `cosign` before it is pulled.
 - **You run what was signed.** Each image is pinned to the digest that was verified.
+- **Config can be signed too.** The host can refuse any commit that a trusted key did not sign.
 - **A bad release rolls back.** Config and image return together, and the failed release is not retried.
 
 ## See it run
@@ -46,7 +47,7 @@ The [walkthrough](docs/walkthrough.md) shows every stage, including an unsigned 
 
 `quaddeploy sync` runs these steps:
 
-1. **Fetch** the configured branch of the config repo.
+1. **Fetch** the configured branch of the config repo. If commit verification is on, stop unless the commit is signed by a trusted key.
 2. **Verify** every image named in the repo's Quadlet files with `cosign`. A missing or wrong signature stops the run and changes nothing.
 3. **Pin** each image to the digest that was signed.
 4. **Compare** the pinned files with the release that is deployed. Stop if they match.
@@ -71,6 +72,8 @@ Create `~/.config/quaddeploy/config.toml`. [examples/config.toml](examples/confi
 url = "https://github.com/alice/app.git"
 branch = "main"    # default
 path = "deploy"    # default
+# Optional: accept only commits signed by one of these SSH keys.
+allowed_signers = "~/.config/quaddeploy/allowed_signers"
 
 # Who must have signed the images. This form trusts one GitHub Actions workflow.
 [verify]
@@ -126,7 +129,8 @@ Each file's comments give the `[verify]` settings that trust it.
 - It does not manage secrets. Use `podman secret`.
 - It refuses `.kube` and `.build` units, because it cannot verify their images.
 - It verifies the `Image=` key only. Other ways to name an image in a unit are not checked.
-- Unit files are not signed. Anyone who can push to the config branch controls what runs.
+- Commit verification is optional. Without `allowed_signers`, anyone who can push to the config branch controls what runs.
+- Commit verification accepts SSH signatures only, so commits made in the GitHub web interface are refused.
 - It does not overwrite unit files that it did not install.
 
 ## Read more

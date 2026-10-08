@@ -112,3 +112,21 @@ def test_load_rejects_invalid_config(tmp_path: Path, text: str) -> None:
 def test_load_reports_a_missing_file(tmp_path: Path) -> None:
     with pytest.raises(config.ConfigError, match="not found"):
         config.load(tmp_path / "absent.toml", ENV)
+
+
+def test_commit_verification_is_off_by_default(tmp_path: Path) -> None:
+    assert config.load(_write(tmp_path, MINIMAL), ENV).allowed_signers is None
+
+
+def test_load_reads_allowed_signers(tmp_path: Path) -> None:
+    text = REPO + 'allowed_signers = "/etc/quaddeploy/allowed_signers"\n' + VERIFY
+
+    cfg = config.load(_write(tmp_path, text), ENV)
+
+    assert cfg.allowed_signers == Path("/etc/quaddeploy/allowed_signers")
+
+
+@pytest.mark.parametrize("value", ['""', "1", '"-c"'])
+def test_load_rejects_a_bad_allowed_signers_value(tmp_path: Path, value: str) -> None:
+    with pytest.raises(config.ConfigError):
+        config.load(_write(tmp_path, REPO + f"allowed_signers = {value}\n" + VERIFY), ENV)

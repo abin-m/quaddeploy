@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from conftest import COMMIT, DIGEST, OTHER_DIGEST, FakeRunner, cosign_output
 
 from quaddeploy import reconcile, release, status
 from quaddeploy.config import Config
+from quaddeploy.gitrepo import UntrustedCommitError
 from quaddeploy.runner import CommandError, Result
 from quaddeploy.verify import VerifyError
 
@@ -258,3 +261,19 @@ def test_a_rollback_to_an_unhealthy_release_is_reported(cfg: Config, fake_run: F
         reconcile.sync(cfg, fake_run)
 
     assert _installed(cfg) == WEB_PINNED
+
+
+def test_an_untrusted_commit_changes_nothing(cfg: Config, fake_run: FakeRunner) -> None:
+    _repo_file(cfg, "web.container", WEB)
+    reconcile.sync(cfg, fake_run)
+    fake_run.calls.clear()
+    _repo_file(cfg, "web.container", WEB_V2)
+    fake_run.results["verify-commit"] = Result(1, "", "")
+    signed_only = replace(cfg, allowed_signers=cfg.state_dir / "allowed_signers")
+
+    with pytest.raises(UntrustedCommitError):
+        reconcile.sync(signed_only, fake_run)
+
+    assert _installed(cfg) == WEB_PINNED
+    assert fake_run.systemctl() == []
+    assert fake_run.ran("cosign") == []
