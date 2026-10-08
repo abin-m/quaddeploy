@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -31,8 +32,17 @@ class Runner(Protocol):
 
 def run(argv: Sequence[str], *, check: bool = True) -> Result:
     """Run a command and return its output. Raise CommandError on failure if check is set."""
+    # The agent runs unattended. A command that asks a question must fail, not wait.
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     try:
-        proc = subprocess.run(list(argv), capture_output=True, text=True, check=False)
+        proc = subprocess.run(
+            list(argv),
+            capture_output=True,
+            text=True,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            env=env,
+        )
     except FileNotFoundError as exc:
         raise CommandError(argv, Result(127, "", str(exc))) from exc
     result = Result(proc.returncode, proc.stdout, proc.stderr)

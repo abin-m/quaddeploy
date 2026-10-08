@@ -84,18 +84,22 @@ urls = ["http://127.0.0.1:8080/healthz"]
 
 To verify with a public key instead, set `key = "/path/to/cosign.pub"` in `[verify]`. Image names must include their registry, such as `ghcr.io/alice/app:main`.
 
-Then check the signatures, deploy once and turn on the timer:
+Then check the host, check the signatures, deploy once and turn on the timer:
 
 ```sh
+quaddeploy preflight
 quaddeploy verify
 quaddeploy sync
 quaddeploy init
 ```
 
+New to this? [Deploy your own app](docs/getting-started.md) goes from an empty repo to a running service, step by step.
+
 ## Commands
 
 | Command | What it does |
 |---|---|
+| `quaddeploy preflight` | Check that the host is ready, and say how to fix what is missing |
 | `quaddeploy verify` | Check signatures and deploy nothing |
 | `quaddeploy sync` | Deploy once |
 | `quaddeploy sync --force` | Retry a release that was rejected |
@@ -127,6 +131,7 @@ Each file's comments give the `[verify]` settings that trust it.
 
 ## Read more
 
+- [Deploy your own app](docs/getting-started.md): from an empty repo to a running service.
 - [Walkthrough](docs/walkthrough.md): every stage on a real host, with output.
 - [Architecture](docs/architecture.md): how the parts fit, and why.
 - [Threat model](docs/threat-model.md): what it defends against and what it leaves open.

@@ -30,10 +30,11 @@ Run all four checks before you commit. `.github/workflows/ci.yml` runs the same 
 | `src/quaddeploy/release.py` | Release folders, the state pointers, installing files |
 | `src/quaddeploy/status.py` | The status file written after each run |
 | `src/quaddeploy/timer.py` | The systemd timer that `init` installs |
+| `src/quaddeploy/preflight.py` | The host checks behind `preflight`, each with a fix |
 | `examples/` | Demo app, demo unit file, a sample config and a GitLab CI example |
 | `tests/` | Unit tests |
 | `tests/integration/` | End-to-end test against real Git, Podman, systemd and cosign |
-| `docs/` | Architecture, threat model and comparison with other tools |
+| `docs/` | Getting-started guide, walkthrough, architecture, threat model and comparison |
 
 The state folder holds `releases/<id>/` and three pointer files: `current`, `previous` and `rejected`.
 

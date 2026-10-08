@@ -10,7 +10,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from quaddeploy import __version__, config, reconcile, release, status, timer
+from quaddeploy import __version__, config, preflight, reconcile, release, status, timer
 from quaddeploy.health import HealthError
 from quaddeploy.release import UnmanagedFileError
 from quaddeploy.runner import CommandError, Runner, run
@@ -40,6 +40,7 @@ def _parser() -> argparse.ArgumentParser:
     commands.add_parser("status", help="print the result of the last run")
     commands.add_parser("rollback", help="return to the release before the current one")
     commands.add_parser("verify", help="check the signatures of the repo's images")
+    commands.add_parser("preflight", help="check that this host is ready, and say what is missing")
     init = commands.add_parser("init", help="install the systemd timer that runs sync")
     init.add_argument(
         "--schedule",
@@ -100,6 +101,21 @@ def _init(runner: Runner, config_path: Path, schedule: str) -> int:
     return 0
 
 
+def _preflight(runner: Runner, config_path: Path) -> int:
+    checks = preflight.run_checks(runner, config_path)
+    for check in checks:
+        print(f"{check.level:<4}  {check.summary}")
+        if check.fix:
+            print(f"      {check.fix}")
+    failed = sum(check.level == preflight.FAIL for check in checks)
+    print()
+    if failed:
+        print(f"{failed} problem{'s' if failed > 1 else ''} to fix before this host can deploy.")
+        return 1
+    print("This host is ready. Next: quaddeploy verify")
+    return 0
+
+
 def _status(cfg: config.Config) -> int:
     record = status.read(cfg.state_dir)
     if record is None:
@@ -115,6 +131,9 @@ def main(argv: Sequence[str] | None = None, runner: Runner = run) -> int:
     args = _parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr)
     config_path = args.config or config.default_config_path()
+    # Preflight reports a bad config itself, with the other checks.
+    if args.command == "preflight":
+        return _preflight(runner, config_path)
     try:
         cfg = config.load(config_path)
     except config.ConfigError as exc:

@@ -172,6 +172,16 @@ def test_a_signed_image_is_deployed_pinned_to_its_digest(host: Host) -> None:
     assert host.status()["result"] == "deployed"
 
 
+def test_preflight_passes_on_this_host(host: Host, capsys: pytest.CaptureFixture[str]) -> None:
+    assert host.quaddeploy("preflight") == 0
+
+    out = capsys.readouterr().out
+    assert "FAIL" not in out
+    for expected in ("ok    git ", "ok    podman ", "ok    cosign ", "ok    systemd user session"):
+        assert expected in out
+    assert "the repo is reachable and has branch main" in out
+
+
 def test_a_repeat_sync_changes_nothing(host: Host) -> None:
     started = sh("systemctl", "--user", "show", SERVICE, "-p", "ActiveEnterTimestamp")
 
