@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="827" height="403" viewBox="0 0 764 372" role="img" aria-label="QuadDeploy overview: CI builds and signs an image, and the host pulls the repo and the verified image">
+<defs>
+<marker id="grey" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8b949e"/></marker>
+<marker id="green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#3fb950"/></marker>
+</defs>
+<rect x="0.5" y="0.5" width="763" height="371" rx="10" fill="#0d1117" stroke="#30363d"/>
+<g font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" text-anchor="middle">
+
+<!-- Outside the host -->
+<g fill="#161b22" stroke="#30363d">
+<rect x="40" y="40" width="150" height="58" rx="8"/>
+<rect x="292" y="40" width="180" height="58" rx="8"/>
+<rect x="574" y="40" width="150" height="58" rx="8"/>
+</g>
+<g fill="#f0f6fc" font-size="14" font-weight="600">
+<text x="115" y="65">Git repo</text>
+<text x="382" y="65">CI workflow</text>
+<text x="649" y="65">Image registry</text>
+</g>
+<g fill="#8b949e" font-size="11.5">
+<text x="115" y="83">Quadlet unit files</text>
+<text x="382" y="83">build, then sign with cosign</text>
+<text x="649" y="83">image and signature</text>
+</g>
+<g stroke="#8b949e" stroke-width="1.5" fill="none">
+<path d="M190 69H286" marker-end="url(#grey)"/>
+<path d="M472 69H568" marker-end="url(#grey)"/>
+</g>
+<g fill="#8b949e" font-size="11">
+<text x="238" y="60">push</text>
+<text x="520" y="60">push</text>
+</g>
+
+<!-- The host pulls -->
+<g stroke="#3fb950" stroke-width="1.5" fill="none">
+<path d="M290 246V150H115V104" marker-end="url(#green)"/>
+<path d="M350 246V150H649V104" marker-end="url(#green)"/>
+</g>
+<g fill="#3fb950" font-size="11.5" font-weight="600">
+<text x="202" y="142">git fetch</text>
+<text x="500" y="142">verify signature, pull by digest</text>
+</g>
+
+<!-- The host -->
+<rect x="24" y="190" width="716" height="158" rx="10" fill="none" stroke="#30363d" stroke-dasharray="5 5"/>
+<text x="40" y="214" text-anchor="start" fill="#8b949e" font-size="11" letter-spacing="0.8">ONE LINUX HOST · ROOTLESS</text>
+<text x="724" y="214" text-anchor="end" fill="#8b949e" font-size="11" letter-spacing="0.8">NO INBOUND ACCESS</text>
+<g fill="#161b22" stroke="#30363d">
+<rect x="44" y="246" width="128" height="58" rx="8"/>
+<rect x="458" y="246" width="128" height="58" rx="8"/>
+<rect x="622" y="246" width="100" height="58" rx="8"/>
+</g>
+<rect x="220" y="246" width="200" height="58" rx="8" fill="#161b22" stroke="#3fb950" stroke-width="1.5"/>
+<g fill="#f0f6fc" font-size="14" font-weight="600">
+<text x="108" y="271">systemd timer</text>
+<text x="320" y="271">quaddeploy sync</text>
+<text x="522" y="271">Quadlet units</text>
+<text x="672" y="271">Podman</text>
+</g>
+<g fill="#8b949e" font-size="11.5">
+<text x="108" y="289">every two minutes</text>
+<text x="320" y="289">verify · pin · apply · check health</text>
+<text x="522" y="289">pinned to digests</text>
+<text x="672" y="289">containers</text>
+</g>
+<g stroke="#8b949e" stroke-width="1.5" fill="none">
+<path d="M172 275H214" marker-end="url(#grey)"/>
+<path d="M420 275H452" marker-end="url(#grey)"/>
+<path d="M586 275H616" marker-end="url(#grey)"/>
+</g>
+<text x="320" y="330" fill="#8b949e" font-size="11.5">rolls back if the new release is unhealthy</text>
+</g>
+</svg>

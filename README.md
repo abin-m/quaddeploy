@@ -1,10 +1,46 @@
-# QuadDeploy
+<h1 align="center">QuadDeploy</h1>
 
-QuadDeploy deploys containers to a single Linux host from a Git repo. A small agent on the host pulls the repo on a timer and installs its [Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) unit files for rootless Podman. It runs only images that carry a valid signature, and it rolls back a release that fails its health check.
+<p align="center">
+  Pull-based deployment for a single Linux host.<br>
+  Rootless Podman, systemd Quadlets and signed container images.
+</p>
+
+<p align="center">
+  <a href="https://github.com/abin-m/quaddeploy/actions/workflows/ci.yml"><img src="https://github.com/abin-m/quaddeploy/actions/workflows/ci.yml/badge.svg" alt="ci"></a>
+  <a href="https://github.com/abin-m/quaddeploy/actions/workflows/integration.yml"><img src="https://github.com/abin-m/quaddeploy/actions/workflows/integration.yml/badge.svg" alt="integration"></a>
+  <a href="https://github.com/abin-m/quaddeploy/actions/workflows/image.yml"><img src="https://github.com/abin-m/quaddeploy/actions/workflows/image.yml/badge.svg" alt="image"></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11 or later">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT licence"></a>
+</p>
+
+<p align="center">
+  <img src="docs/images/overview.svg" alt="CI builds and signs an image. The host fetches the repo, verifies the signature and pulls the image by digest." width="827">
+</p>
+
+A small agent on the host pulls a Git repo on a timer and installs its [Quadlet](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) unit files. It runs only images that carry a valid signature, and it rolls back a release that fails its health check.
 
 It is for the case where Kubernetes is more than the problem needs.
 
 > **Status:** early development, built as a showcase. An end-to-end test runs in CI on Ubuntu 24.04, and the agent has been run by hand on Rocky Linux 10.2 with Podman 5.8 and cosign 3.1. It has no production use behind it.
+
+## What it does
+
+- **The host pulls.** CI holds no SSH key or token for the host.
+- **Unsigned images never run.** Every image is checked with `cosign` before it is pulled.
+- **You run what was signed.** Each image is pinned to the digest that was verified.
+- **A bad release rolls back.** Config and image return together, and the failed release is not retried.
+
+## See it run
+
+A deploy: the image is verified, pinned to its digest and started.
+
+<p align="center"><img src="docs/images/deploy.png" alt="quaddeploy sync deploys a release, the app answers, and the unit file names the image by digest" width="827"></p>
+
+A release that fails its health check: it is rolled back and then refused.
+
+<p align="center"><img src="docs/images/rollback.png" alt="quaddeploy sync rolls back an unhealthy release and rejects it on the next run" width="827"></p>
+
+The [walkthrough](docs/walkthrough.md) shows every stage, including an unsigned image and an unattended deploy.
 
 ## How it works
 
@@ -12,29 +48,21 @@ It is for the case where Kubernetes is more than the problem needs.
 
 1. **Fetch** the configured branch of the config repo.
 2. **Verify** every image named in the repo's Quadlet files with `cosign`. A missing or wrong signature stops the run and changes nothing.
-3. **Pin** each image to the digest that was signed, so the host runs exactly what was verified.
+3. **Pin** each image to the digest that was signed.
 4. **Compare** the pinned files with the release that is deployed. Stop if they match.
 5. **Apply** the new release: pull the images, copy the files into `~/.config/containers/systemd`, reload systemd and restart only the units that changed.
 6. **Check health.** Every container unit must be active and every configured URL must answer.
-7. **Roll back** to the earlier release if a unit fails to start or a check fails. The failed release is marked as rejected and is not tried again.
-
-The host pulls. Nothing outside the host needs SSH access or deploy credentials.
+7. **Roll back** to the earlier release if a unit fails to start or a check fails.
 
 Because the agent resolves a tag to a digest on each run, pushing a new signed image to the same tag also triggers a deploy.
 
-## Requirements
+## Quick start
 
-- Linux with systemd and Podman 4.4 or later
-- Python 3.11 or later
-- Git and [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
-
-## Install
+You need Linux with systemd, Podman 4.4 or later, Python 3.11 or later, Git and [cosign](https://docs.sigstore.dev/cosign/system_config/installation/).
 
 ```sh
 pipx install git+https://github.com/abin-m/quaddeploy.git
 ```
-
-## Configure
 
 Create `~/.config/quaddeploy/config.toml`. [examples/config.toml](examples/config.toml) is a full example.
 
@@ -54,20 +82,26 @@ timeout = 60       # seconds to wait for a healthy release
 urls = ["http://127.0.0.1:8080/healthz"]
 ```
 
-To verify with a public key instead, set `key = "/path/to/cosign.pub"` in `[verify]`.
+To verify with a public key instead, set `key = "/path/to/cosign.pub"` in `[verify]`. Image names must include their registry, such as `ghcr.io/alice/app:main`.
 
-Image names must include their registry, such as `ghcr.io/alice/app:main`.
-
-## Use
+Then check the signatures, deploy once and turn on the timer:
 
 ```sh
-quaddeploy verify          # check signatures, deploy nothing
-quaddeploy sync            # deploy once
-quaddeploy init            # install a systemd timer that runs sync every two minutes
-quaddeploy status          # show the last result and any hand-edited unit files
-quaddeploy rollback        # return to the release before the current one
-quaddeploy sync --force    # retry a release that was rejected
+quaddeploy verify
+quaddeploy sync
+quaddeploy init
 ```
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `quaddeploy verify` | Check signatures and deploy nothing |
+| `quaddeploy sync` | Deploy once |
+| `quaddeploy sync --force` | Retry a release that was rejected |
+| `quaddeploy init` | Install a systemd timer that runs `sync` every two minutes |
+| `quaddeploy status` | Show the last result and any hand-edited unit files |
+| `quaddeploy rollback` | Return to the release before the current one |
 
 `sync` exits non-zero when it fails, rolls back or skips a rejected release, so the timer's service shows as failed in `systemctl --user status quaddeploy`.
 
@@ -86,6 +120,7 @@ quaddeploy sync --force    # retry a release that was rejected
 
 ## Read more
 
+- [Walkthrough](docs/walkthrough.md): every stage on a real host, with output.
 - [Architecture](docs/architecture.md): how the parts fit, and why.
 - [Threat model](docs/threat-model.md): what it defends against and what it leaves open.
 - [Comparison](docs/comparison.md): how it differs from `podman auto-update`, FetchIt, Materia, Kamal and Kubernetes.
