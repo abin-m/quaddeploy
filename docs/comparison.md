@@ -9,7 +9,7 @@ The entries are based on each project's own documentation, not on running the to
 | Tool | Direction | What it deploys | Checks image signatures itself |
 |---|---|---|---|
 | QuadDeploy | Pull | Quadlet unit files from Git, with images pinned to digests | Yes, required |
-| `podman auto-update` | Pull | New images for units that already exist | No |
+| `podman auto-update` | Pull | New images for units that already exist | No. Podman's policy can, but not against a CI workflow identity |
 | FetchIt | Pull | Several Podman deployment methods from Git | Not that I found documented |
 | Materia | Pull | Quadlets from Git | Not that I found documented |
 | Kamal | Push | Docker containers over SSH | Not that I found documented |
@@ -24,7 +24,7 @@ It is the simplest way to keep images fresh, and for many hosts it is all that i
 The differences:
 
 - **Scope.** It updates images. It does not install, change or remove unit files, so the units still have to reach the host some other way.
-- **Signatures.** Its documentation does not mention signature checks. Podman can enforce them separately through `policy.json`.
+- **Signatures.** It does not check them. Podman's separate [signature policy](https://github.com/containers/image/blob/main/docs/containers-policy.json.5.md) can, but for keyless signatures it matches only an email address. It cannot require a specific CI workflow, which is the identity a GitHub Actions or GitLab pipeline signs with. See [architecture](architecture.md#signatures-are-checked-before-anything-is-pulled).
 - **Rollback trigger.** It rolls back when the restart fails. QuadDeploy also rolls back when the unit starts but a health URL does not answer.
 - **Rollback scope.** It rolls back the image. QuadDeploy rolls back the unit file and the image together, because the digest is written in the file.
 

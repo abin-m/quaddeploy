@@ -55,7 +55,13 @@ The cost is delay. A change waits for the next timer run, two minutes by default
 
 The agent runs `cosign verify` on each image named in the repo. If any image fails, the run stops before a single file on the host changes. There is no option to skip this.
 
-Podman can also enforce signatures through `policy.json`. QuadDeploy checks in the agent instead, for two reasons. The failure is reported by the tool that the operator is already watching. And the check returns the signed digest, which the next step needs.
+Podman has its own signature policy, in [`policy.json`](https://github.com/containers/image/blob/main/docs/containers-policy.json.5.md). QuadDeploy does not rely on it, for three reasons.
+
+- **It cannot name a CI pipeline as the signer.** For a keyless signature, the policy accepts only an email address as the identity. A GitHub Actions or GitLab pipeline signs with a URL, such as `https://github.com/alice/app/.github/workflows/image.yml@refs/heads/main`, and the policy has no field for that. `cosign verify` does, so the agent can require one exact workflow on one branch.
+- **A per-user policy replaces the system one.** Writing `~/.config/containers/policy.json` hides the rules the distro ships in `/etc/containers`. The agent would have to take over a file that other software depends on.
+- **The agent needs the digest.** `cosign verify` returns the digest that was signed, which the next step uses.
+
+A Podman policy does work with a plain public key. If you sign with a key, it is a sound second layer, and you can add it by hand.
 
 ### Commits can be verified as well
 
