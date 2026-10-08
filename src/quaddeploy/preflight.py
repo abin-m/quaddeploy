@@ -8,8 +8,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from quaddeploy import config, timer
-from quaddeploy.runner import CommandError, Runner
+from quaddeploy import config, gitrepo, timer
+from quaddeploy.runner import CommandError, Runner, redact
 
 OK, WARN, FAIL = "ok", "warn", "FAIL"
 
@@ -96,21 +96,41 @@ def _timer(run: Runner) -> Check:
     )
 
 
+def _repo_fix(stderr: str) -> str:
+    """Suggest a fix for the two usual ways an SSH login to a Git host fails."""
+    if "Host key verification failed" in stderr:
+        return (
+            "This host has never connected to the Git server. Add its key: "
+            "ssh-keyscan github.com >> ~/.ssh/known_hosts, then check the fingerprint "
+            "against the one the server publishes."
+        )
+    if "Permission denied" in stderr:
+        return "Add the public half of repo.ssh_key to the repo as a read-only deploy key."
+    return "Check repo.url. A private repo needs repo.ssh_key or stored Git credentials."
+
+
+def _file(path: Path | None, summary: str, missing: str, fix: str) -> list[Check]:
+    """Check an optional file setting. No result if it is not set."""
+    if path is None:
+        return []
+    if not path.is_file():
+        return [Check(FAIL, f"{missing} {path} does not exist", fix)]
+    return [Check(OK, f"{summary} {path}")]
+
+
 def _repo(run: Runner, cfg: config.Config) -> Check | None:
     """Check that the config repo can be read and has the branch. None if git is missing."""
+    git = gitrepo.base_command(cfg.ssh_key)
+    url = redact(cfg.repo_url)
     try:
-        result = run(["git", "ls-remote", "--heads", cfg.repo_url, cfg.branch], check=False)
+        result = run([*git, "ls-remote", "--heads", cfg.repo_url, cfg.branch], check=False)
     except CommandError:
         return None
     if result.returncode != 0:
-        reason = (result.stderr.strip().splitlines() or ["git gave no reason"])[-1]
-        return Check(
-            FAIL,
-            f"cannot read {cfg.repo_url}: {reason}",
-            "Check repo.url. A private repo needs Git credentials on this host.",
-        )
+        reason = redact((result.stderr.strip().splitlines() or ["git gave no reason"])[-1])
+        return Check(FAIL, f"cannot read {url}: {reason}", _repo_fix(result.stderr))
     if not result.stdout.strip():
-        return Check(FAIL, f"{cfg.repo_url} has no branch named {cfg.branch}", "Check repo.branch.")
+        return Check(FAIL, f"{url} has no branch named {cfg.branch}", "Check repo.branch.")
     return Check(OK, f"the repo is reachable and has branch {cfg.branch}")
 
 
@@ -144,6 +164,18 @@ def _config(run: Runner, config_path: Path) -> list[Check]:
                 "Copy the cosign public key there, or correct verify.key.",
             )
         )
+    checks += _file(
+        cfg.ssh_key,
+        "git logs in with the key",
+        "the deploy key",
+        "Create it with: ssh-keygen -t ed25519 -N '' -f PATH, then correct repo.ssh_key.",
+    )
+    checks += _file(
+        cfg.registry_authfile,
+        "registry credentials come from",
+        "the registry credentials file",
+        "Create it with: podman login --authfile PATH REGISTRY",
+    )
     checks.append(_signers(cfg))
     if cfg.notify_url is None:
         checks.append(

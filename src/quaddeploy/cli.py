@@ -14,7 +14,7 @@ from quaddeploy import __version__, config, notify, preflight, reconcile, releas
 from quaddeploy.gitrepo import UntrustedCommitError
 from quaddeploy.health import HealthError
 from quaddeploy.release import UnmanagedFileError
-from quaddeploy.runner import CommandError, Runner, run
+from quaddeploy.runner import CommandError, Runner, run, with_env
 from quaddeploy.verify import VerifyError
 
 log = logging.getLogger("quaddeploy")
@@ -143,18 +143,24 @@ def _status(cfg: config.Config) -> int:
     return 0 if record["result"] in ("deployed", "unchanged") else 1
 
 
-def main(argv: Sequence[str] | None = None, runner: Runner = run) -> int:
+def main(argv: Sequence[str] | None = None, runner: Runner | None = None) -> int:
     args = _parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr)
     config_path = args.config or config.default_config_path()
     # Preflight reports a bad config itself, with the other checks.
     if args.command == "preflight":
-        return _preflight(runner, config_path)
+        return _preflight(runner or run, config_path)
     try:
         cfg = config.load(config_path)
     except config.ConfigError as exc:
         log.error("%s", exc)
         return 2
+    if runner is None:
+        runner = run
+        # cosign does not read Podman's saved logins. This variable makes both tools
+        # use the same credentials file.
+        if cfg.registry_authfile is not None:
+            runner = with_env({"REGISTRY_AUTH_FILE": str(cfg.registry_authfile)})
     if args.command == "init":
         return _init(runner, config_path, args.schedule)
     if args.command == "sync":

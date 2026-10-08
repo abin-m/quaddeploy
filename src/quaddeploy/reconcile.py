@@ -43,7 +43,12 @@ class Outcome:
 def desired(config: Config, run: Runner) -> Desired:
     """Fetch the repo, verify every image and return the unit files pinned to digests."""
     commit = gitrepo.update(
-        run, config.repo_url, config.branch, config.state_dir / "repo", config.allowed_signers
+        run,
+        config.repo_url,
+        config.branch,
+        config.state_dir / "repo",
+        config.allowed_signers,
+        config.ssh_key,
     )
     deploy_dir = config.state_dir / "repo" / config.deploy_path
     if not deploy_dir.is_dir():

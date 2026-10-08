@@ -92,6 +92,8 @@ url = "https://hooks.example.com/your-webhook"
 
 To verify with a public key instead, set `key = "/path/to/cosign.pub"` in `[verify]`. Image names must include their registry, such as `ghcr.io/alice/app:main`.
 
+A private repo needs `ssh_key` in `[repo]`, and a private image needs `authfile` in a `[registry]` section. The [guide](docs/getting-started.md#private-repos-and-images) has the steps.
+
 Then check the host, check the signatures, deploy once and turn on the timer:
 
 ```sh

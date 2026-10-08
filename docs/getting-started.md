@@ -92,7 +92,7 @@ It builds for both `amd64` and `arm64`. An image built for the wrong architectur
 
 Commit both files and push. On GitHub, open the **Actions** tab and wait for `image` to pass.
 
-Then open your profile's **Packages** tab, select the `app` package and check its visibility under **Package settings**. A public package needs nothing more. This guide has only been tested with a public image. A private one needs `podman login ghcr.io` on the host.
+Then open your profile's **Packages** tab, select the `app` package and check its visibility under **Package settings**. A public package needs nothing more. For a private one, or a private repo, see [Private repos and images](#private-repos-and-images) once the host is set up.
 
 ## Part 2: on the host
 
@@ -246,6 +246,57 @@ The agent posts one JSON message when a deploy fails, rolls back or recovers. Th
 
 Treat the URL as a secret. Anyone who has it can post to your channel.
 
+## Private repos and images
+
+Skip this section if your repo and your image are both public.
+
+### A private repo
+
+Give the host its own read-only key, called a deploy key. On the host:
+
+```sh
+ssh-keygen -t ed25519 -N '' -f ~/.config/quaddeploy/deploy_key
+cat ~/.config/quaddeploy/deploy_key.pub
+```
+
+On GitHub, open the repo's **Settings**, then **Deploy keys**, and add the line that `cat` printed. Leave write access off.
+
+The host must also know the Git server's key. Add it, then compare the fingerprint with the one [GitHub publishes](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints):
+
+```sh
+ssh-keyscan github.com >> ~/.ssh/known_hosts
+ssh-keygen -lf ~/.ssh/known_hosts
+```
+
+Then use the SSH form of the URL and name the key in the config:
+
+```toml
+[repo]
+url = "git@github.com:alice/app.git"
+ssh_key = "~/.config/quaddeploy/deploy_key"
+```
+
+Do not put a token in an HTTPS URL. The config file is plain text.
+
+### A private image
+
+Log in once, to a file that survives a reboot. For GitHub Container Registry, the password is a personal access token with the `read:packages` scope.
+
+```sh
+podman login --authfile ~/.config/containers/auth.json ghcr.io
+```
+
+Then tell QuadDeploy to use that file:
+
+```toml
+[registry]
+authfile = "~/.config/containers/auth.json"
+```
+
+The setting is needed even though Podman finds that file by itself. cosign does not read it, so without the setting the signature check fails with `UNAUTHORIZED`. A plain `podman login`, with no `--authfile`, works for both tools but is forgotten when the host reboots.
+
+Run `quaddeploy preflight` again after either change. It checks that the key and the credentials file exist, and that the repo can be read.
+
 ## Part 3: ship a change
 
 Change your app, commit and push. Nothing else is needed. To watch it arrive, run this on the host:
@@ -267,6 +318,9 @@ Start with `quaddeploy status`, then `journalctl --user -u quaddeploy` for the a
 | `signature check failed: ... no signatures found` | The image was never signed | Check that the `image` workflow passed |
 | `signature check failed`, and the message mentions identities | The image was signed by a different workflow, branch or repo | Make `certificate_identity` match the workflow that signed it |
 | `is not signed by a trusted key` | The newest commit is unsigned, or signed by a key that is not in `allowed_signers` | Sign the commit with a listed key. A merge made on GitHub does not count |
+| `signature check failed`, and the message says `UNAUTHORIZED` | The image is private and cosign has no credentials | Set `authfile` in a `[registry]` section. See [Private repos and images](#private-repos-and-images) |
+| `Permission denied (publickey)` | The repo is private and the host's key is not accepted | Add the public half of `repo.ssh_key` as a deploy key on the repo |
+| `Host key verification failed` | The host has never connected to the Git server | Add the server's key to `~/.ssh/known_hosts` |
 | `image must include its registry` | The unit file uses a short image name | Write the full name, such as `ghcr.io/alice/app:main` |
 | `Exec format error` in the service's journal | The image was built for another CPU architecture | Build for the host's architecture. The workflow above builds both |
 | `did not answer with success`, then a rollback | The health URL did not return 200 in time | Check the URL and port. For a slow start, raise `timeout` in `[health]` |

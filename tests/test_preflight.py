@@ -232,3 +232,70 @@ def test_no_webhook_is_a_warning(tools: Tools, config_file: Path) -> None:
 
     assert check.level == preflight.WARN
     assert "quaddeploy notify" in check.fix
+
+
+def _with(config_file: Path, repo_line: str = "", extra: str = "") -> Path:
+    text = config_file.read_text().replace("[verify]", repo_line + "[verify]") + extra
+    config_file.write_text(text)
+    return config_file
+
+
+def test_the_repo_check_logs_in_with_the_deploy_key(tools: Tools, config_file: Path) -> None:
+    key = config_file.parent / "deploy_key"
+    key.write_text("key")
+    tools.outputs["git -c core.sshCommand=ssh -i"] = Result(0, "abc123\trefs/heads/main\n", "")
+    del tools.outputs["git ls-remote"]
+
+    checks = preflight.run_checks(tools, _with(config_file, f'ssh_key = "{key}"\n'))
+
+    assert _find(checks, "git logs in with the key").level == preflight.OK
+    assert _find(checks, "the repo is reachable").level == preflight.OK
+
+
+def test_a_missing_deploy_key_fails(tools: Tools, config_file: Path) -> None:
+    tools.outputs["git -c core.sshCommand=ssh -i"] = Result(
+        128, "", "Permission denied (publickey)."
+    )
+    key = config_file.parent / "absent_key"
+
+    checks = preflight.run_checks(tools, _with(config_file, f'ssh_key = "{key}"\n'))
+
+    assert _find(checks, "the deploy key").level == preflight.FAIL
+    assert "deploy key" in _find(checks, "cannot read").fix
+
+
+def test_an_unknown_git_host_gets_a_specific_fix(tools: Tools, config_file: Path) -> None:
+    tools.outputs["git ls-remote"] = Result(128, "", "Host key verification failed.\n")
+
+    assert "known_hosts" in _find(preflight.run_checks(tools, config_file), "cannot read").fix
+
+
+def test_a_token_in_the_repo_url_is_not_printed(tools: Tools, config_file: Path) -> None:
+    config_file.write_text(
+        config_file.read_text().replace("https://git.example", "https://alice:s3cret@git.example")
+    )
+    tools.outputs["git ls-remote"] = Result(128, "", "fatal: could not read from remote\n")
+
+    summaries = " ".join(check.summary for check in preflight.run_checks(tools, config_file))
+
+    assert "s3cret" not in summaries
+    assert "https://***@git.example.com/alice/app.git" in summaries
+
+
+def test_a_missing_credentials_file_fails(tools: Tools, config_file: Path) -> None:
+    extra = f'[registry]\nauthfile = "{config_file.parent / "auth.json"}"\n'
+
+    check = _find(preflight.run_checks(tools, _with(config_file, extra=extra)), "credentials file")
+
+    assert check.level == preflight.FAIL
+    assert "podman login --authfile" in check.fix
+
+
+def test_an_existing_credentials_file_passes(tools: Tools, config_file: Path) -> None:
+    authfile = config_file.parent / "auth.json"
+    authfile.write_text("{}")
+    extra = f'[registry]\nauthfile = "{authfile}"\n'
+
+    checks = preflight.run_checks(tools, _with(config_file, extra=extra))
+
+    assert _find(checks, "registry credentials come from").level == preflight.OK

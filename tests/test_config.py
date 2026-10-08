@@ -146,3 +146,37 @@ def test_load_reads_a_webhook_url(tmp_path: Path) -> None:
 def test_load_rejects_a_bad_webhook_url(tmp_path: Path, value: str) -> None:
     with pytest.raises(config.ConfigError):
         config.load(_write(tmp_path, MINIMAL + f"[notify]\nurl = {value}\n"), ENV)
+
+
+def test_private_access_is_off_by_default(tmp_path: Path) -> None:
+    cfg = config.load(_write(tmp_path, MINIMAL), ENV)
+
+    assert (cfg.ssh_key, cfg.registry_authfile) == (None, None)
+
+
+def test_load_reads_a_deploy_key_and_a_credentials_file(tmp_path: Path) -> None:
+    text = (
+        REPO
+        + 'ssh_key = "/etc/quaddeploy/deploy_key"\n'
+        + VERIFY
+        + '[registry]\nauthfile = "/etc/quaddeploy/auth.json"\n'
+    )
+
+    cfg = config.load(_write(tmp_path, text), ENV)
+
+    assert cfg.ssh_key == Path("/etc/quaddeploy/deploy_key")
+    assert cfg.registry_authfile == Path("/etc/quaddeploy/auth.json")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        REPO + 'ssh_key = ""\n' + VERIFY,
+        REPO + 'ssh_key = "-oProxyCommand=evil"\n' + VERIFY,
+        MINIMAL + "[registry]\nauthfile = 1\n",
+        "registry = 1\n" + MINIMAL,
+    ],
+)
+def test_load_rejects_bad_private_access_settings(tmp_path: Path, text: str) -> None:
+    with pytest.raises(config.ConfigError):
+        config.load(_write(tmp_path, text), ENV)

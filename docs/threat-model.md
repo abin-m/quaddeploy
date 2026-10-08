@@ -104,6 +104,14 @@ With keyless signing, the trusted identity is a CI workflow. Anyone who can chan
 
 The agent verifies the `Image=` key. A unit can name an image in other ways, such as `Mount=type=image,...`, and those are not verified or pinned.
 
+### Credentials stored on the host
+
+A private repo or image means the host holds a credential: a deploy key, a registry login, or both. They sit in files that the deploy user can read. Anyone who gets that far can read the repo and pull the images.
+
+Keep them narrow. Use a deploy key with write access off, and a registry token that can only read packages. Then a stolen credential exposes the code and nothing more.
+
+The agent hides a user name, password or token written into an HTTP URL before it logs, records or reports an error. It cannot hide one from the config file itself, so do not put a token in `repo.url`.
+
 ### What notifications reveal
 
 A notification carries the host name, release ids, the commit hash and the error text, which can include image names and URLs. It goes to whoever runs the webhook. The webhook URL sits in the config file in plain text, and anyone who reads it can post to that endpoint.

@@ -101,6 +101,18 @@ The agent records the id of the failed release and skips it. A new commit or a n
 
 Unit files are installed flat into the user's Quadlet folder, beside any the operator wrote by hand. The agent keeps a list of the files in each release. It refuses to overwrite a file that is not on its list, and it removes only files that are.
 
+### Both tools read one credentials file
+
+For a private image, cosign must read the signature and Podman must pull the image. They look for registry credentials in different places. Tested with cosign 3.1 and Podman 5.8:
+
+| Credentials saved by | cosign | Podman | Kept after a reboot |
+|---|---|---|---|
+| `podman login` | Reads them | Reads them | No |
+| `podman login --authfile ~/.config/containers/auth.json` | Does not | Reads them | Yes |
+| The `REGISTRY_AUTH_FILE` variable, pointing at any file | Reads them | Reads them | Yes |
+
+The first row works until the host restarts. The second fails at the signature check. So the agent takes one file from `registry.authfile` and sets `REGISTRY_AUTH_FILE` for every command it runs.
+
 ### Failure is visible in systemd
 
 `sync` exits non-zero when it fails, rolls back or skips a rejected release. The timer's service then shows as failed, so `systemctl --user status quaddeploy` and any existing unit monitoring report it. The agent can also post to a webhook. It compares each run's result with the last one and reports only a change: a new failure, a rollback or a recovery. Without that comparison, a rejected release would send a message every two minutes. A webhook that is down is logged and otherwise ignored, so alerting can never break a deploy.

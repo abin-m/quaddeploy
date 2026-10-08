@@ -44,6 +44,8 @@ The state folder holds `releases/<id>/` and three pointer files: `current`, `pre
 - The runtime uses the Python standard library only. Do not add runtime dependencies.
 - Call external commands through the `Runner` passed into a function. Do not import `subprocess` outside `runner.py`. Tests rely on this to run without Git, Podman, cosign or systemd.
 - Pass commands as argument lists. Do not build shell strings.
+- Give a command extra environment through `runner.with_env`, not `os.environ`.
+- Pass any text that may hold a URL through `runner.redact` before it is logged or shown.
 - Validate any value that is written into a unit file or passed to a command. A line break in a unit file adds directives, and a leading dash turns an argument into an option.
 - No image runs without a verified signature. Do not add a way to skip verification.
 - Write files with a temporary file and `os.replace`, as `release.py` does. A crash must not leave a half-written unit file.

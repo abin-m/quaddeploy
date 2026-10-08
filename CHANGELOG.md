@@ -25,6 +25,9 @@ The first version. It deploys Quadlet unit files from a Git repo to one host.
 - With `repo.allowed_signers` set, the config repo's newest commit must carry an SSH signature from a listed key.
 - A release that fails to start or fails its health check is rolled back and not retried.
 - Unit files that the agent did not install are never overwritten.
+- `repo.ssh_key` names a deploy key for a private config repo.
+- `registry.authfile` names one credentials file that both cosign and Podman use for a private image.
+- A user name, password or token in an HTTP URL is hidden in logs, the status file and notifications.
 - With a `[notify]` URL set, a webhook is told when a deploy fails, rolls back or recovers. A standing failure is reported once.
 
 ### Tested on

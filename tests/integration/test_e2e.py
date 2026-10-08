@@ -32,6 +32,10 @@ REGISTRY = "localhost:5000"
 IMAGE = f"{REGISTRY}/qd-e2e"
 REGISTRY_CONTAINER = "qd-e2e-registry"
 REGISTRY_IMAGE = "docker.io/library/registry:2"
+# A second registry that asks for a password, to test private images.
+PRIVATE_REGISTRY = "localhost:5001"
+PRIVATE_IMAGE = f"{PRIVATE_REGISTRY}/qd-e2e-private"
+PRIVATE_CONTAINER = "qd-e2e-private-registry"
 UNIT = "qd-e2e.container"
 SERVICE = "qd-e2e.service"
 PORT = 18080
@@ -101,6 +105,7 @@ class Host:
     def tear_down(self) -> None:
         self.webhook.stop()
         self.remove_unit()
+        sh("podman", "rm", "-f", "-t", "0", PRIVATE_CONTAINER, check=False)
         sh("podman", "rm", "-f", REGISTRY_CONTAINER, check=False)
 
     def remove_unit(self) -> None:
@@ -135,9 +140,11 @@ class Host:
                 capture_output=True,
             )
 
-    def commit_unit(self, tag: str, *, healthy: bool = True, signed: bool = True) -> None:
-        """Commit a unit file to the config repo that runs IMAGE:tag."""
-        lines = ["[Container]", f"Image={IMAGE}:{tag}", f"PublishPort=127.0.0.1:{PORT}:8080"]
+    def commit_unit(
+        self, tag: str, *, healthy: bool = True, signed: bool = True, image: str = IMAGE
+    ) -> None:
+        """Commit a unit file to the config repo that runs image:tag."""
+        lines = ["[Container]", f"Image={image}:{tag}", f"PublishPort=127.0.0.1:{PORT}:8080"]
         if not healthy:
             lines.append("Environment=HEALTHY=0")
         (self.repo / "deploy" / UNIT).write_text("\n".join(lines) + "\n")
@@ -156,6 +163,93 @@ class Host:
         message = f"run {tag}, healthy={healthy}, signed={signed}"
         sh(*GIT, *signing, "-C", str(self.repo), "commit", "-q", "--allow-empty", "-m", message)
 
+    def start_private_registry(self) -> Path:
+        """Start a registry that needs a password. Return a credentials file for it."""
+        password_file = self.work / "htpasswd"
+        hashed = sh(
+            "podman",
+            "run",
+            "--rm",
+            "--entrypoint",
+            "htpasswd",
+            "docker.io/library/httpd:2",
+            "-Bbn",
+            "e2e",
+            "s3cret",
+        )
+        password_file.write_text(hashed + "\n")
+        sh("podman", "rm", "-f", "-t", "0", PRIVATE_CONTAINER, check=False)
+        sh(
+            "podman",
+            "run",
+            "-d",
+            "--rm",
+            "--name",
+            PRIVATE_CONTAINER,
+            "-p",
+            "127.0.0.1:5001:5000",
+            "-v",
+            f"{password_file}:/auth/htpasswd:ro,Z",
+            "-e",
+            "REGISTRY_AUTH=htpasswd",
+            "-e",
+            "REGISTRY_AUTH_HTPASSWD_REALM=e2e",
+            "-e",
+            "REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd",
+            REGISTRY_IMAGE,
+        )
+        for _ in range(30):
+            try:
+                urllib.request.urlopen(f"http://{PRIVATE_REGISTRY}/v2/", timeout=2)
+            except urllib.error.HTTPError as exc:
+                if exc.code == 401:
+                    break
+            except OSError:
+                pass
+            time.sleep(1)
+        else:
+            pytest.fail("the private registry did not start")
+        # Logging in to a named file keeps the password out of every default location,
+        # so only the agent's own setting can supply it.
+        authfile = self.work / "auth.json"
+        sh(
+            "podman",
+            "login",
+            "--authfile",
+            str(authfile),
+            "-u",
+            "e2e",
+            "-p",
+            "s3cret",
+            PRIVATE_REGISTRY,
+        )
+        return authfile
+
+    def publish_private(self, version: str, authfile: Path) -> None:
+        """Build, push and sign PRIVATE_IMAGE:stable using the credentials in authfile."""
+        ref = f"{PRIVATE_IMAGE}:stable"
+        digest_file = self.work / "private-digest"
+        version_arg = ["--build-arg", f"APP_VERSION={version}"]
+        sh("podman", "build", "-q", "--no-cache", *version_arg, "-t", ref, str(DEMO_APP))
+        sh(
+            "podman",
+            "push",
+            "-q",
+            "--authfile",
+            str(authfile),
+            "--digestfile",
+            str(digest_file),
+            ref,
+        )
+        pinned = f"{PRIVATE_IMAGE}@{digest_file.read_text().strip()}"
+        subprocess.run(
+            ["cosign", "sign", "--yes", "--key", "cosign.key", pinned],
+            cwd=self.work,
+            env={**os.environ, "COSIGN_PASSWORD": "", "REGISTRY_AUTH_FILE": str(authfile)},
+            check=True,
+            capture_output=True,
+        )
+
     def quaddeploy(self, *args: str) -> int:
         return cli.main(["--config", str(self.config), *args])
 
@@ -172,7 +266,12 @@ def host(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Host]:
     work = tmp_path_factory.mktemp("e2e")
     # Podman refuses a plain-HTTP registry unless it is marked insecure.
     registries = work / "registries.conf"
-    registries.write_text(f'[[registry]]\nlocation = "{REGISTRY}"\ninsecure = true\n')
+    registries.write_text(
+        "".join(
+            f'[[registry]]\nlocation = "{name}"\ninsecure = true\n'
+            for name in (REGISTRY, PRIVATE_REGISTRY)
+        )
+    )
     patch = pytest.MonkeyPatch()
     patch.setenv("CONTAINERS_REGISTRIES_CONF", str(registries))
     machine = Host(work)
@@ -276,3 +375,21 @@ def test_a_manual_rollback_returns_to_the_previous_release(host: Host) -> None:
 
     assert http_get("/") == (200, "QuadDeploy demo, version v1")
     assert sh("systemctl", "--user", "is-active", SERVICE) == "active"
+
+
+def test_a_private_image_deploys_once_the_credentials_file_is_set(host: Host) -> None:
+    authfile = host.start_private_registry()
+    host.publish_private("private", authfile)
+    host.commit_unit("stable", image=PRIVATE_IMAGE)
+
+    # Without credentials, cosign cannot read the signature and nothing is deployed.
+    assert host.quaddeploy("sync") == 1
+    assert "signature check failed" in host.status()["error"]
+    assert http_get("/") == (200, "QuadDeploy demo, version v1")
+
+    host.config.write_text(host.config.read_text() + f'[registry]\nauthfile = "{authfile}"\n')
+
+    assert host.quaddeploy("sync") == 0
+    assert http_get("/") == (200, "QuadDeploy demo, version private")
+    assert f"Image={PRIVATE_IMAGE}@sha256:" in host.installed_unit()
+    assert host.webhook.events()[-2:] == ["failed", "recovered"]

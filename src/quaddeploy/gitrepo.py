@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
 from quaddeploy.runner import Runner
@@ -9,6 +10,15 @@ from quaddeploy.runner import Runner
 
 class UntrustedCommitError(RuntimeError):
     """The fetched commit is not signed by a trusted key."""
+
+
+def base_command(ssh_key: Path | None = None) -> list[str]:
+    """Return the git command, set up to log in with ssh_key if one is given."""
+    if ssh_key is None:
+        return ["git"]
+    # IdentitiesOnly stops ssh from offering other keys first. BatchMode stops it asking.
+    ssh = f"ssh -i {shlex.quote(str(ssh_key))} -o IdentitiesOnly=yes -o BatchMode=yes"
+    return ["git", "-c", f"core.sshCommand={ssh}"]
 
 
 def _verify(run: Runner, git: list[str], commit: str, allowed_signers: Path) -> None:
@@ -36,17 +46,23 @@ def _verify(run: Runner, git: list[str], commit: str, allowed_signers: Path) -> 
 
 
 def update(
-    run: Runner, url: str, branch: str, dest: Path, allowed_signers: Path | None = None
+    run: Runner,
+    url: str,
+    branch: str,
+    dest: Path,
+    allowed_signers: Path | None = None,
+    ssh_key: Path | None = None,
 ) -> str:
     """Check out the latest commit of branch into dest and return its hash.
 
     With allowed_signers, refuse a commit that is not signed by one of those keys. The
     check runs before the checkout, so untrusted files never replace trusted ones.
     """
+    base = base_command(ssh_key)
     if not (dest / ".git").exists():
         dest.parent.mkdir(parents=True, exist_ok=True)
-        run(["git", "clone", "--no-checkout", url, str(dest)])
-    git = ["git", "-C", str(dest)]
+        run([*base, "clone", "--no-checkout", url, str(dest)])
+    git = [*base, "-C", str(dest)]
     run([*git, "remote", "set-url", "origin", url])
     run([*git, "fetch", "--prune", "origin", branch])
     commit = run([*git, "rev-parse", "FETCH_HEAD"]).stdout.strip()

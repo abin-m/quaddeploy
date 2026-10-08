@@ -77,3 +77,26 @@ def test_update_refuses_an_untrusted_commit_and_checks_nothing_out(
         gitrepo.update(fake_run, URL, "main", tmp_path, tmp_path / "allowed_signers")
 
     assert not any("checkout" in call for call in fake_run.calls)
+
+
+def test_base_command_is_plain_git_without_a_key() -> None:
+    assert gitrepo.base_command() == ["git"]
+
+
+def test_base_command_quotes_the_key_for_the_shell_that_git_starts() -> None:
+    command = gitrepo.base_command(Path("/home/alice/my keys/deploy"))
+
+    ssh = "ssh -i '/home/alice/my keys/deploy' -o IdentitiesOnly=yes -o BatchMode=yes"
+    assert command == ["git", "-c", f"core.sshCommand={ssh}"]
+
+
+def test_update_uses_the_deploy_key_for_every_git_command(
+    tmp_path: Path, fake_run: FakeRunner
+) -> None:
+    key = tmp_path / "deploy_key"
+
+    gitrepo.update(fake_run, URL, "main", tmp_path / "clone", ssh_key=key)
+
+    base = gitrepo.base_command(key)
+    assert all(call[:3] == base for call in fake_run.calls)
+    assert fake_run.calls[0][3] == "clone"

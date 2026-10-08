@@ -43,6 +43,10 @@ class Config:
     allowed_signers: Path | None = None
     # Webhook that is told when a deploy fails, rolls back or recovers. None turns it off.
     notify_url: str | None = None
+    # Private key that git logs in with, for a private config repo over SSH.
+    ssh_key: Path | None = None
+    # Registry credentials file, given to both cosign and Podman.
+    registry_authfile: Path | None = None
 
 
 def _xdg(env: Mapping[str, str], var: str, fallback: str) -> Path:
@@ -94,6 +98,13 @@ def _verify(table: Mapping[str, Any]) -> VerifyConfig:
         identity=_string(table, "certificate_identity", "verify"),
         issuer=_string(table, "certificate_oidc_issuer", "verify"),
     )
+
+
+def _path(table: Mapping[str, Any], key: str, where: str) -> Path | None:
+    """Return an optional path setting, or None if it is not set."""
+    if key not in table:
+        return None
+    return Path(_string(table, key, where)).expanduser()
 
 
 def _notify(table: Mapping[str, Any]) -> str | None:
@@ -155,4 +166,6 @@ def load(path: Path, env: Mapping[str, str] = os.environ) -> Config:
         health=_health(_table(data, "health")),
         allowed_signers=allowed_signers,
         notify_url=_notify(_table(data, "notify")),
+        ssh_key=_path(repo, "ssh_key", "repo"),
+        registry_authfile=_path(_table(data, "registry"), "authfile", "registry"),
     )
