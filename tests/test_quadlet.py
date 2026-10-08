@@ -83,3 +83,9 @@ def test_image_refs_ignores_image_keys_in_other_sections() -> None:
     text = "[Service]\nImage=registry.example.com/alice/web:1\n"
 
     assert quadlet.image_refs(text) == []
+
+
+def test_image_refs_reads_an_image_backed_volume() -> None:
+    text = "[Volume]\nDriver=image\nImage=registry.example.com/alice/data:1\n"
+
+    assert quadlet.image_refs(text) == ["registry.example.com/alice/data:1"]

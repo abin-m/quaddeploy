@@ -23,7 +23,8 @@ WORKLOAD_SUFFIXES = frozenset({".container", ".kube", ".pod"})
 # and .build makes them on the host.
 UNVERIFIABLE_SUFFIXES = frozenset({".kube", ".build"})
 
-_IMAGE_SECTIONS = frozenset({"Container", "Image"})
+# Sections whose Image= key names a registry image. A volume uses one with Driver=image.
+_IMAGE_SECTIONS = frozenset({"Container", "Image", "Volume"})
 
 
 def is_unit(name: str) -> bool:

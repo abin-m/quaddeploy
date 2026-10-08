@@ -4,7 +4,7 @@ QuadDeploy deploys containers to a single Linux host from a Git repo. A small ag
 
 It is for the case where Kubernetes is more than the problem needs.
 
-> **Status:** early development. It has been run by hand on one host: Rocky Linux 10.2 on arm64, with Podman 5.8 and cosign 3.1. There is no automated end-to-end test yet. Do not use it for anything you care about.
+> **Status:** early development, built as a showcase. An end-to-end test runs in CI on Ubuntu 24.04, and the agent has been run by hand on Rocky Linux 10.2 with Podman 5.8 and cosign 3.1. It has no production use behind it.
 
 ## How it works
 
@@ -80,7 +80,15 @@ quaddeploy sync --force    # retry a release that was rejected
 - QuadDeploy manages one host and gives no high availability.
 - It does not manage secrets. Use `podman secret`.
 - It refuses `.kube` and `.build` units, because it cannot verify their images.
+- It verifies the `Image=` key only. Other ways to name an image in a unit are not checked.
+- Unit files are not signed. Anyone who can push to the config branch controls what runs.
 - It does not overwrite unit files that it did not install.
+
+## Read more
+
+- [Architecture](docs/architecture.md): how the parts fit, and why.
+- [Threat model](docs/threat-model.md): what it defends against and what it leaves open.
+- [Comparison](docs/comparison.md): how it differs from `podman auto-update`, FetchIt, Materia, Kamal and Kubernetes.
 
 ## Develop
 

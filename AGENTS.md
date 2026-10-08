@@ -32,6 +32,8 @@ Run all four checks before you commit. `.github/workflows/ci.yml` runs the same 
 | `src/quaddeploy/timer.py` | The systemd timer that `init` installs |
 | `examples/` | Demo app, demo unit file and a sample config |
 | `tests/` | Unit tests |
+| `tests/integration/` | End-to-end test against real Git, Podman, systemd and cosign |
+| `docs/` | Architecture, threat model and comparison with other tools |
 
 The state folder holds `releases/<id>/` and three pointer files: `current`, `previous` and `rejected`.
 
@@ -51,7 +53,15 @@ The state folder holds `releases/<id>/` and three pointer files: `current`, `pre
 
 Tests use the `fake_run` and `cfg` fixtures from `tests/conftest.py`. `fake_run` records each command and returns canned results. Add a test for each failure path you add, not only the success path.
 
-The agent's real behaviour depends on systemd, Podman and cosign, which the unit tests do not exercise. Say so when you report a change that only the unit tests cover.
+The agent's real behaviour depends on systemd, Podman and cosign, which the unit tests do not exercise. `tests/integration` covers that. It is skipped unless `QUADDEPLOY_E2E=1` is set, and it needs a Linux host with a systemd user session, rootless Podman, cosign and internet access:
+
+```sh
+QUADDEPLOY_E2E=1 .venv/bin/pytest tests/integration -v
+```
+
+It starts a registry on `localhost:5000` and installs a unit named `qd-e2e.container` for the current user, then removes both. `.github/workflows/integration.yml` runs it on every push.
+
+Say so when you report a change that only the unit tests cover.
 
 ## Writing
 
