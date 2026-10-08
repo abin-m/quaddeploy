@@ -13,6 +13,7 @@ PINNED = f"registry.example.com/alice/web@{DIGEST}"
 WEB_PINNED = f"[Container]\nImage={PINNED}\n"
 WEB_V2 = WEB + "PublishPort=8080:8080\n"
 FAILED = Result(3, "failed\n", "")
+ACTIVE = Result(0, "active\n", "")
 
 
 def _repo_file(cfg: Config, name: str, text: str) -> None:
@@ -165,7 +166,7 @@ def test_an_unhealthy_release_rolls_back_to_the_previous_one(
     first = reconcile.sync(cfg, fake_run)
     fake_run.calls.clear()
     _repo_file(cfg, "web.container", WEB_V2)
-    fake_run.results["is-active"] = FAILED
+    fake_run.results["is-active"] = [FAILED, ACTIVE]
 
     outcome = reconcile.sync(cfg, fake_run)
 
@@ -193,7 +194,7 @@ def test_rollback_restores_a_unit_the_bad_release_dropped(
     reconcile.sync(cfg, fake_run)
     (cfg.state_dir / "repo" / "deploy" / "api.container").unlink()
     _repo_file(cfg, "web.container", WEB_V2)
-    fake_run.results["is-active"] = FAILED
+    fake_run.results["is-active"] = [FAILED, ACTIVE]
 
     reconcile.sync(cfg, fake_run)
 
@@ -245,3 +246,15 @@ def test_sync_refuses_a_missing_deploy_folder(cfg: Config, fake_run: FakeRunner)
 
     with pytest.raises(reconcile.ReconcileError, match="not a folder"):
         reconcile.sync(cfg, fake_run)
+
+
+def test_a_rollback_to_an_unhealthy_release_is_reported(cfg: Config, fake_run: FakeRunner) -> None:
+    _repo_file(cfg, "web.container", WEB)
+    reconcile.sync(cfg, fake_run)
+    _repo_file(cfg, "web.container", WEB_V2)
+    fake_run.results["is-active"] = FAILED
+
+    with pytest.raises(reconcile.ReconcileError, match="so did the rollback"):
+        reconcile.sync(cfg, fake_run)
+
+    assert _installed(cfg) == WEB_PINNED

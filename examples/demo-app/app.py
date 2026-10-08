@@ -6,6 +6,8 @@ Set HEALTHY=0 to make /healthz fail, which shows a rollback.
 from __future__ import annotations
 
 import os
+import signal
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 VERSION = os.environ.get("APP_VERSION", "dev")
@@ -31,5 +33,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # As process 1 in a container, Python ignores SIGTERM unless a handler is set.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     port = int(os.environ.get("PORT", "8080"))
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()

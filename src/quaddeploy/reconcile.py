@@ -116,7 +116,7 @@ def sync(
 
     old_id = old.id if old else ""
     if not force and release.rejected(state_dir) == new_id:
-        error = f"release {new_id} failed before. Run 'quaddeploy sync --force' to retry it"
+        error = f"release {new_id} is rejected. Run 'quaddeploy sync --force' to deploy it"
         status.write(state_dir, "rejected", commit=want.commit, release=old_id, error=error)
         return Outcome("rejected", want.commit, old_id, [], [], error)
 
@@ -135,7 +135,15 @@ def sync(
         release.set_rejected(state_dir, new.id)
         try:
             _switch(run, config.unit_dir, old, new)
-        except (CommandError, OSError, release.UnmanagedFileError) as failure:
+            # A restart that returns does not prove the old release is serving again.
+            if old is not None:
+                wait(run, _workloads(old), config.health)
+        except (
+            CommandError,
+            OSError,
+            release.UnmanagedFileError,
+            health.HealthError,
+        ) as failure:
             raise ReconcileError(
                 f"release {new.id} failed and so did the rollback: {failure}"
             ) from failure

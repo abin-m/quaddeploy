@@ -4,7 +4,7 @@ QuadDeploy deploys containers to a single Linux host from a Git repo. A small ag
 
 It is for the case where Kubernetes is more than the problem needs.
 
-> **Status:** early development. The unit tests pass, but the agent has not yet been run against real systemd, Podman and cosign. Do not use it for anything you care about.
+> **Status:** early development. It has been run by hand on one host: Rocky Linux 10.2 on arm64, with Podman 5.8 and cosign 3.1. There is no automated end-to-end test yet. Do not use it for anything you care about.
 
 ## How it works
 
