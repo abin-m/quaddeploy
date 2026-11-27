@@ -28,6 +28,7 @@ It is for the case where Kubernetes is more than the problem needs.
 - **The host pulls.** CI holds no SSH key or token for the host.
 - **Unsigned images never run.** Every image is checked with `cosign` before it is pulled.
 - **You run what was signed.** Each image is pinned to the digest that was verified.
+- **A tag cannot move back.** An older signed image is refused once a newer one has run.
 - **Config can be signed too.** The host can refuse any commit that a trusted key did not sign.
 - **A bad release rolls back.** Config and image return together, and the failed release is not retried.
 - **You hear about it.** A webhook is told when a deploy fails, rolls back or recovers.
@@ -50,7 +51,7 @@ The [walkthrough](docs/walkthrough.md) shows every stage, including an unsigned 
 
 1. **Fetch** the configured branch of the config repo. If commit verification is on, stop unless the commit is signed by a trusted key.
 2. **Verify** every image named in the repo's Quadlet files with `cosign`. A missing or wrong signature stops the run and changes nothing.
-3. **Pin** each image to the digest that was signed.
+3. **Pin** each image to the digest that was signed. Stop if a tag moved back to an image this host has already replaced.
 4. **Compare** the pinned files with the release that is deployed. Stop if they match.
 5. **Apply** the new release: pull the images, copy the files into `~/.config/containers/systemd`, reload systemd and restart only the units that changed.
 6. **Check health.** Every container unit must be active and every configured URL must answer.

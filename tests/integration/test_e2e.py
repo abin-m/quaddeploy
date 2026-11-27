@@ -41,6 +41,12 @@ UNIT = "qd-e2e.container"
 SERVICE = "qd-e2e.service"
 PORT = 18080
 DEMO_APP = Path(__file__).parents[2] / "examples" / "demo-app"
+MANIFEST_TYPES = (
+    "application/vnd.oci.image.index.v1+json",
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+)
 # The developer's own Git hooks must not run on the test's commits.
 GIT = ["git", "-c", "user.name=e2e", "-c", "user.email=e2e@example.com", "-c", "core.hooksPath="]
 
@@ -71,6 +77,8 @@ class Host:
     def __init__(self, work: Path) -> None:
         self.work = work
         self.webhook = Webhook()
+        # The digest of each version of the demo app that was pushed as IMAGE:stable.
+        self.digests: dict[str, str] = {}
         self.repo = work / "repo"
         self.state = work / "state"
         self.config = work / "config.toml"
@@ -120,17 +128,34 @@ class Host:
                 time.sleep(1)
         pytest.fail("the local registry did not start")
 
-    def publish(self, tag: str, version: str, *, sign: bool = True) -> None:
-        """Build the demo app as IMAGE:tag and push it, with or without a signature."""
+    def publish(self, tag: str, version: str, *, sign: bool = True) -> str:
+        """Build the demo app as IMAGE:tag, push it and return its digest.
+
+        Sign it unless sign is False.
+        """
         ref = f"{IMAGE}:{tag}"
         digest_file = self.work / "digest"
         version_arg = ["--build-arg", f"APP_VERSION={version}"]
         # Podman's layer cache ignores a changed build argument that only feeds ENV.
         sh("podman", "build", "-q", "--no-cache", *version_arg, "-t", ref, str(DEMO_APP))
         sh("podman", "push", "-q", "--digestfile", str(digest_file), ref)
+        digest = digest_file.read_text().strip()
         if sign:
-            pinned = f"{IMAGE}@{digest_file.read_text().strip()}"
-            self.sign(pinned)
+            self.sign(f"{IMAGE}@{digest}")
+        return digest
+
+    def retag(self, tag: str, digest: str) -> None:
+        """Point IMAGE:tag at an image already in the registry, as a registry owner could."""
+        base = f"http://{REGISTRY}/v2/{IMAGE.partition('/')[2]}/manifests"
+        accept = ", ".join(MANIFEST_TYPES)
+        get = urllib.request.Request(f"{base}/{digest}", headers={"Accept": accept})
+        with urllib.request.urlopen(get, timeout=10) as response:
+            manifest, media_type = response.read(), response.headers["Content-Type"]
+        # Sending the same bytes back keeps the digest, so the old signature still matches.
+        put = urllib.request.Request(
+            f"{base}/{tag}", data=manifest, method="PUT", headers={"Content-Type": media_type}
+        )
+        urllib.request.urlopen(put, timeout=10).close()
 
     def sign(self, pinned: str, **env: str) -> None:
         """Sign an image digest with the throwaway key."""
@@ -283,7 +308,7 @@ def host(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Host]:
 
 
 def test_a_signed_image_is_deployed_pinned_to_its_digest(host: Host) -> None:
-    host.publish("stable", "v1")
+    host.digests["v1"] = host.publish("stable", "v1")
     host.commit_unit("stable")
 
     assert host.quaddeploy("sync") == 0
@@ -313,7 +338,7 @@ def test_a_repeat_sync_changes_nothing(host: Host) -> None:
 
 
 def test_a_new_image_behind_the_same_tag_is_deployed(host: Host) -> None:
-    host.publish("stable", "v2")
+    host.digests["v2"] = host.publish("stable", "v2")
 
     assert host.quaddeploy("sync") == 0
 
@@ -415,3 +440,17 @@ def test_a_private_image_deploys_once_the_credentials_file_is_set(host: Host) ->
     assert http_get("/") == (200, "QuadDeploy demo, version private")
     assert f"Image={PRIVATE_IMAGE}@sha256:" in host.installed_unit()
     assert host.webhook.events()[-2:] == ["failed", "recovered"]
+
+
+def test_a_tag_moved_back_to_an_image_it_replaced_is_refused(host: Host) -> None:
+    host.commit_unit("stable")
+    assert host.quaddeploy("sync") == 0
+    assert http_get("/") == (200, "QuadDeploy demo, version v2")
+    before = host.installed_unit()
+
+    host.retag("stable", host.digests["v1"])
+
+    assert host.quaddeploy("sync") == 1
+    assert "already replaced" in host.status()["error"]
+    assert host.installed_unit() == before
+    assert http_get("/") == (200, "QuadDeploy demo, version v2")

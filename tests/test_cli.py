@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import DIGEST, FakeRunner
+from conftest import DIGEST, OTHER_DIGEST, FakeRunner, cosign_output
 
 from quaddeploy import cli
 from quaddeploy.config import Config
@@ -70,6 +70,21 @@ def test_unsigned_image_exits_one(args: list[str], cfg: Config, fake_run: FakeRu
 
     assert cli.main([*args, "sync"], fake_run) == 1
     assert cli.main([*args, "verify"], fake_run) == 1
+
+
+def test_a_tag_moved_back_exits_one_and_records_the_error(
+    args: list[str], cfg: Config, fake_run: FakeRunner, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repo_file(cfg, WEB)
+    cli.main([*args, "sync"], fake_run)
+    fake_run.results["cosign"] = cosign_output(OTHER_DIGEST)
+    cli.main([*args, "sync"], fake_run)
+    fake_run.results["cosign"] = cosign_output(DIGEST)
+
+    assert cli.main([*args, "sync"], fake_run) == 1
+    assert cli.main([*args, "verify"], fake_run) == 1
+    assert cli.main([*args, "status"], fake_run) == 1
+    assert "already replaced" in json.loads(capsys.readouterr().out)["error"]
 
 
 def test_rolled_back_sync_exits_one_until_forced(

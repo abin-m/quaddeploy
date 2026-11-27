@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from quaddeploy import gitrepo, health, quadlet, release, status, verify
+from quaddeploy import gitrepo, health, quadlet, release, replay, status, verify
 from quaddeploy.config import Config, HealthConfig
 from quaddeploy.release import Release
 from quaddeploy.runner import CommandError, Runner
@@ -69,7 +69,9 @@ def desired(config: Config, run: Runner) -> Desired:
             raise ReconcileError(f"{path.name} is not UTF-8 text") from exc
         for ref in quadlet.image_refs(text):
             if ref not in images:
-                images[ref] = verify.pin(ref, verify.verify(run, config.verify, ref))
+                pinned = verify.pin(ref, verify.verify(run, config.verify, ref))
+                replay.check(config.state_dir, ref, pinned)
+                images[ref] = pinned
         files[path.name] = quadlet.rewrite_images(text, images).encode()
     return Desired(commit, files, images)
 
@@ -167,6 +169,8 @@ def sync(
 
     release.set_current(state_dir, new)
     release.clear_rejected(state_dir)
+    # Only a healthy deploy counts. A digest that failed or was rolled back replaced nothing.
+    replay.record(state_dir, new.images)
     status.write(
         state_dir,
         "deployed",

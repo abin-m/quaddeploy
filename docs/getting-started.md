@@ -322,6 +322,7 @@ Start with `quaddeploy status`, then `journalctl --user -u quaddeploy` for the a
 | `signature check failed`, and the message says `UNAUTHORIZED` | The image is private and cosign has no credentials | Set `authfile` in a `[registry]` section. See [Private repos and images](#private-repos-and-images) |
 | `Permission denied (publickey)` | The repo is private and the host's key is not accepted | Add the public half of `repo.ssh_key` as a deploy key on the repo |
 | `Host key verification failed` | The host has never connected to the Git server | Add the server's key to `~/.ssh/known_hosts` |
+| `an image this host has already replaced` | The tag now points to an older image than the one this host runs. Someone moved the tag back | If you did not move it, find out who did. To run that image on purpose, set `Image=` to the digest the message gives |
 | `image must include its registry` | The unit file uses a short image name | Write the full name, such as `ghcr.io/alice/app:main` |
 | `Exec format error` in the service's journal | The image was built for another CPU architecture | Build for the host's architecture. The workflow above builds both |
 | `did not answer with success`, then a rollback | The health URL did not return 200 in time | Check the URL and port. For a slow start, raise `timeout` in `[health]` |
