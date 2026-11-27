@@ -24,6 +24,7 @@ from quaddeploy import (
 from quaddeploy.gitrepo import UntrustedCommitError
 from quaddeploy.health import HealthError
 from quaddeploy.release import UnmanagedFileError
+from quaddeploy.replay import ReplayError
 from quaddeploy.runner import CommandError, Runner, run, with_env
 from quaddeploy.verify import VerifyError
 
@@ -35,6 +36,7 @@ _ERRORS = (
     reconcile.ReconcileError,
     UnmanagedFileError,
     VerifyError,
+    ReplayError,
     HealthError,
     OSError,
 )

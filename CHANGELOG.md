@@ -2,6 +2,12 @@
 
 This project follows [semantic versioning](https://semver.org). Until 1.0, a minor version may change behaviour.
 
+## Unreleased
+
+### Behaviour
+
+- A tag that moves back to an image this host already replaced stops the run. Name the image by digest to deploy it on purpose. The record is `images.json` in the state folder.
+
 ## 0.1.0 (2026-11-27)
 
 The first version. It deploys Quadlet unit files from a Git repo to one host.

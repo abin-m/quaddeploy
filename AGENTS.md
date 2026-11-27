@@ -26,6 +26,7 @@ Run all four checks before you commit. `.github/workflows/ci.yml` runs the same 
 | `src/quaddeploy/gitrepo.py` | Clone and fetch the config repo, and verify the commit's signature |
 | `src/quaddeploy/quadlet.py` | Find unit files, map them to service names, read and rewrite `Image=` |
 | `src/quaddeploy/verify.py` | Run `cosign verify` and pin an image to its digest |
+| `src/quaddeploy/replay.py` | Refuse a tag that moved back to a digest this host replaced |
 | `src/quaddeploy/health.py` | Wait for units and URLs to be healthy |
 | `src/quaddeploy/release.py` | Release folders, the state pointers, installing files |
 | `src/quaddeploy/status.py` | The status file written after each run |
@@ -38,7 +39,7 @@ Run all four checks before you commit. `.github/workflows/ci.yml` runs the same 
 | `tests/integration/` | End-to-end test against real Git, Podman, systemd and cosign |
 | `docs/` | Getting-started guide, walkthrough, architecture, threat model and comparison |
 
-The state folder holds `releases/<id>/` and three pointer files: `current`, `previous` and `rejected`.
+The state folder holds `releases/<id>/`, three pointer files (`current`, `previous` and `rejected`) and `images.json`, the digest record that `replay.py` keeps.
 
 ## Rules
 

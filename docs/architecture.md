@@ -79,6 +79,16 @@ The agent closes that gap. It rewrites each `Image=` line to `name@sha256:...` u
 
 Pinning also gives two things for free. A new image pushed to the same tag changes the rewritten file, so it triggers a deploy. And a rollback restores the old file, which names the old digest, so the image rolls back with the config.
 
+### A tag cannot move back
+
+A valid signature does not mean the image is current. Whoever controls the registry can point a tag back at an older signed image, and its signature still verifies.
+
+So the agent keeps `images.json` in its state folder. For each tag, it holds the digest that the last healthy deploy ran and every digest that one replaced. A tag that resolves to a replaced digest stops the run, as an unsigned image would. `sync --force` does not skip this check.
+
+Only a deploy that passes its health check is recorded. A release that fails and rolls back replaces nothing, and neither does `quaddeploy rollback`. So the usual fix for a bad image, moving the tag back to the last good one, still works when the bad image never went healthy.
+
+An operator who wants an image that was replaced names it by digest in the unit file, as `Image=name@sha256:...`. A digest cannot move, so it is not checked. The change goes through the config repo, which can be signed.
+
 ### A release is identified by its content
 
 The release id is a hash of the pinned unit files. It does not include the Git commit.
@@ -131,6 +141,7 @@ So the agent takes one file from `registry.authfile` and sets both variables for
 | `~/.local/state/quaddeploy/current` | Id of the deployed release |
 | `~/.local/state/quaddeploy/previous` | Id of the release before it, used by `rollback` |
 | `~/.local/state/quaddeploy/rejected` | Id of the release that last failed |
+| `~/.local/state/quaddeploy/images.json` | For each image tag, the digest it runs and the digests that digest replaced |
 | `~/.local/state/quaddeploy/status.json` | Result of the last run |
 
 Files are written to a temporary name and then renamed, so a crash cannot leave a half-written unit file.

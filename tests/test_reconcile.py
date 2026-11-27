@@ -8,6 +8,7 @@ from conftest import COMMIT, DIGEST, OTHER_DIGEST, FakeRunner, cosign_output
 from quaddeploy import reconcile, release, status
 from quaddeploy.config import Config
 from quaddeploy.gitrepo import UntrustedCommitError
+from quaddeploy.replay import ReplayError
 from quaddeploy.runner import CommandError, Result
 from quaddeploy.verify import VerifyError
 
@@ -277,3 +278,67 @@ def test_an_untrusted_commit_changes_nothing(cfg: Config, fake_run: FakeRunner) 
     assert _installed(cfg) == WEB_PINNED
     assert fake_run.systemctl() == []
     assert fake_run.ran("cosign") == []
+
+
+def test_a_tag_moved_back_to_an_image_it_replaced_changes_nothing(
+    cfg: Config, fake_run: FakeRunner
+) -> None:
+    _repo_file(cfg, "web.container", WEB)
+    reconcile.sync(cfg, fake_run)
+    fake_run.results["cosign"] = cosign_output(OTHER_DIGEST)
+    reconcile.sync(cfg, fake_run)
+    before = _installed(cfg)
+    fake_run.calls.clear()
+    fake_run.results["cosign"] = cosign_output(DIGEST)
+
+    with pytest.raises(ReplayError, match="already replaced"):
+        reconcile.sync(cfg, fake_run, force=True)
+
+    assert _installed(cfg) == before
+    assert fake_run.systemctl() == []
+    assert fake_run.ran("podman") == []
+
+
+def test_an_old_image_named_by_digest_is_deployed(cfg: Config, fake_run: FakeRunner) -> None:
+    _repo_file(cfg, "web.container", WEB)
+    reconcile.sync(cfg, fake_run)
+    fake_run.results["cosign"] = cosign_output(OTHER_DIGEST)
+    reconcile.sync(cfg, fake_run)
+    fake_run.results["cosign"] = cosign_output(DIGEST)
+    _repo_file(cfg, "web.container", WEB_PINNED)
+
+    outcome = reconcile.sync(cfg, fake_run)
+
+    assert outcome.result == "deployed"
+    assert _installed(cfg) == WEB_PINNED
+
+
+def test_an_image_that_failed_to_deploy_replaces_nothing(cfg: Config, fake_run: FakeRunner) -> None:
+    _repo_file(cfg, "web.container", WEB)
+    first = reconcile.sync(cfg, fake_run)
+    fake_run.results["cosign"] = cosign_output(OTHER_DIGEST)
+    fake_run.results["is-active"] = [FAILED, ACTIVE]
+    assert reconcile.sync(cfg, fake_run).result == "rolled_back"
+    fake_run.results["is-active"] = ACTIVE
+    fake_run.results["cosign"] = cosign_output(DIGEST)
+
+    outcome = reconcile.sync(cfg, fake_run)
+
+    assert outcome.result == "unchanged"
+    assert outcome.release == first.release
+
+
+def test_a_manual_rollback_does_not_block_the_newer_image(
+    cfg: Config, fake_run: FakeRunner
+) -> None:
+    _repo_file(cfg, "web.container", WEB)
+    reconcile.sync(cfg, fake_run)
+    fake_run.results["cosign"] = cosign_output(OTHER_DIGEST)
+    second = reconcile.sync(cfg, fake_run)
+    reconcile.rollback(cfg, fake_run)
+
+    assert reconcile.sync(cfg, fake_run).result == "rejected"
+    forced = reconcile.sync(cfg, fake_run, force=True)
+
+    assert forced.result == "deployed"
+    assert forced.release == second.release

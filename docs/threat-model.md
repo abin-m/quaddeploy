@@ -28,6 +28,12 @@ The registry is **not** trusted. Neither is the network between the host and the
 
 *Defence:* the agent pulls by the digest that cosign verified and writes that digest into the unit file. The tag is never used to fetch or run anything.
 
+### An old signed image served again
+
+*Threat:* someone who controls the registry points a tag back at an older image that was signed. The signature is still valid, and that image may have a known flaw.
+
+*Defence:* the agent records each digest that a tag ran on this host and which digest replaced it. A tag that resolves to a replaced digest stops the run. To run an old image on purpose, name it by digest in the unit file. That change goes through the config repo. See the gap below for what this record cannot know.
+
 ### An image signed by someone else
 
 *Threat:* an attacker signs their image with their own key or their own CI identity.
@@ -92,9 +98,9 @@ With it on, three limits remain:
 - **Only the newest commit is checked.** A trusted signature on it vouches for everything below it, because a commit's hash covers its whole history.
 - **Only SSH signatures count.** Commits that GitHub creates in the browser, such as pull request merges, carry GitHub's own GPG signature and are refused. Merge locally and push a commit you signed.
 
-### An old signed image can be replayed
+### An old signed image the host never ran
 
-A signature says who built an image. It does not say the image is the newest. Someone who controls the registry can point a tag back at an older signed image, and the agent will deploy it. If that older image has a known flaw, this is a downgrade attack.
+A signature says who built an image. It does not say the image is the newest. The agent refuses a tag that moves back to an image this host already replaced, but it knows only the images this host has deployed. Someone who controls the registry can still point a tag at an older signed image that this host never ran. A new host, or one whose state folder was deleted, has no record at all.
 
 ### Whoever controls the signing workflow controls the host
 
