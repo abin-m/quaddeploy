@@ -123,7 +123,7 @@ sudo install -m 0755 cosign /usr/local/bin/cosign
 Install QuadDeploy. Use `pipx` where you have it, and `pip install --user` otherwise:
 
 ```sh
-pipx install git+https://github.com/abin-m/quaddeploy.git
+pipx install quaddeploy
 ```
 
 If the shell cannot find `quaddeploy` afterwards, add `~/.local/bin` to your `PATH`.

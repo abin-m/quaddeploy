@@ -2,9 +2,7 @@
 
 This project follows [semantic versioning](https://semver.org). Until 1.0, a minor version may change behaviour.
 
-## 0.1.0
-
-Not yet released.
+## 0.1.0 (2026-11-27)
 
 The first version. It deploys Quadlet unit files from a Git repo to one host.
 

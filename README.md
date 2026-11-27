@@ -63,7 +63,7 @@ Because the agent resolves a tag to a digest on each run, pushing a new signed i
 You need Linux with systemd, Podman 4.4 or later, Python 3.11 or later, Git and [cosign](https://docs.sigstore.dev/cosign/system_config/installation/).
 
 ```sh
-pipx install git+https://github.com/abin-m/quaddeploy.git
+pipx install quaddeploy
 ```
 
 Create `~/.config/quaddeploy/config.toml`. [examples/config.toml](examples/config.toml) is a full example.
